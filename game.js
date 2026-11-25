@@ -82,7 +82,10 @@
     mouseVy: 0,
     pointerInside: false,
 
-    // Countdown timer
+    // Countdown timer (adaptive: 3.0s on 1st try per floor, 1.05s on retries)
+    levelAttempts: 0,
+    countdownDuration: 3.0,
+    countdownStepDuration: 1.0,
     countdownVal: 3.0,
     lastCountdownInt: 4,
     outOfCenterWarned: false,
@@ -135,6 +138,7 @@
   function loadCurrentLevel() {
     const def = CAMPAIGN_LEVELS[state.levelIndex];
     state.levelData = buildLevelData(def);
+    state.levelAttempts = 0;
     state.particles = [];
     state.proximity = 0;
     spawnLevelMobs();
@@ -336,8 +340,13 @@
       loadCurrentLevel();
     }
 
+    state.levelAttempts++;
+    const isRetry = state.levelAttempts > 1;
+    state.countdownStepDuration = isRetry ? 0.35 : 1.0;
+    state.countdownDuration = state.countdownStepDuration * 3;
+
     state.phase = "COUNTDOWN";
-    state.countdownVal = 3.0;
+    state.countdownVal = state.countdownDuration;
     state.lastCountdownInt = 4;
     state.outOfCenterWarned = false;
     state.runTime = 0;
@@ -908,7 +917,7 @@
 
       if (!inCenter) {
         // Pause & reset countdown until cursor is safely inside the center sanctuary!
-        state.countdownVal = 3.0;
+        state.countdownVal = state.countdownDuration;
         state.lastCountdownInt = 4;
         countdownNum.className = "warn";
         countdownNum.textContent = "CENTER";
@@ -923,21 +932,21 @@
 
       state.outOfCenterWarned = false;
       state.countdownVal -= dt;
-      const sec = Math.ceil(state.countdownVal);
+      const step = Math.ceil(state.countdownVal / state.countdownStepDuration);
 
-      if (sec > 0) {
+      if (step > 0) {
         countdownNum.className = "";
-        countdownNum.textContent = String(sec);
+        countdownNum.textContent = String(step);
         countdownMsg.textContent =
-          sec === 3
+          step === 3
             ? "HOLD STILL IN THE CENTER..."
-            : sec === 2
+            : step === 2
             ? "STEADY YOUR HAND..."
             : "DON'T TOUCH THE WALLS!";
 
-        if (sec < state.lastCountdownInt) {
-          state.lastCountdownInt = sec;
-          audio.playCountdown(sec);
+        if (step < state.lastCountdownInt) {
+          state.lastCountdownInt = step;
+          audio.playCountdown(step);
         }
       } else {
         // GO! Begin active maze run!
@@ -1129,7 +1138,7 @@
 
       // Countdown progress arc around center circle
       if (inCenter && state.countdownVal > 0) {
-        const frac = state.countdownVal / 3.0;
+        const frac = state.countdownVal / state.countdownDuration;
         ctx.strokeStyle = "#ffffff";
         ctx.lineWidth = 1;
         ctx.beginPath();
