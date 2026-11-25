@@ -4,26 +4,6 @@
 (function (global) {
   "use strict";
 
-  // Hard-disable the entire game immediately on phones / touch-only devices
-  function isPhoneDevice() {
-    const coarseOrNoHover =
-      window.matchMedia &&
-      window.matchMedia("(hover: none), (pointer: coarse)").matches;
-    const uaMobile =
-      /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(
-        navigator.userAgent || ""
-      );
-    const chMobile = !!(navigator.userAgentData && navigator.userAgentData.mobile);
-    return coarseOrNoHover || uaMobile || chMobile;
-  }
-
-  if (isPhoneDevice()) {
-    document.body.classList.add("mobile-blocked");
-    const appEl = document.getElementById("app");
-    if (appEl) appEl.remove();
-    return;
-  }
-
   const { W, H, CX, CY, CATEGORIES, CAMPAIGN_LEVELS, getCategory, buildLevelData } =
     global.MazeLevels;
 
@@ -126,29 +106,7 @@
     adminEnabled: false,
     adminInvincible: false,
     keyBuffer: "",
-
-    // Phone / touch blocker
-    mobileBlocked: false,
   };
-
-  let rafId = null;
-
-  function blockTouchDevice() {
-    if (state.mobileBlocked) return;
-    state.mobileBlocked = true;
-    if (rafId !== null) {
-      cancelAnimationFrame(rafId);
-      rafId = null;
-    }
-    audio.setMuted(true);
-    audio.updateTension(0.016, 0, false);
-    if (audio.ctx && audio.ctx.state === "running") {
-      audio.ctx.suspend().catch(() => {});
-    }
-    document.body.classList.add("mobile-blocked");
-    const appEl = document.getElementById("app");
-    if (appEl) appEl.remove();
-  }
 
   function spawnLevelMobs() {
     const specs = (state.levelData && state.levelData.def.mobs) || [];
@@ -362,7 +320,6 @@
 
   // Start Countdown (triggered by clicking exact-center START button)
   function beginCountdown(clickEvent) {
-    if (state.mobileBlocked) return;
     audio.init();
     audio.playClick();
 
@@ -485,12 +442,6 @@
 
   // ---------------- Pointer Events ----------------
   function handlePointerMove(e) {
-    if (e.pointerType === "touch") {
-      blockTouchDevice();
-      return;
-    }
-    if (state.mobileBlocked) return;
-
     const [lx, ly] = eventToLogical(e);
     state.pointerInside = lx >= 0 && lx <= W && ly >= 0 && ly <= H;
 
@@ -567,16 +518,6 @@
       triggerJumpscare("YOU CANNOT FLEE");
     }
   }
-
-  window.addEventListener(
-    "pointerdown",
-    (e) => {
-      if (e.pointerType === "touch") {
-        blockTouchDevice();
-      }
-    },
-    true
-  );
 
   canvas.addEventListener("pointermove", handlePointerMove);
   canvas.addEventListener("pointerleave", handlePointerLeave);
@@ -1623,12 +1564,11 @@
   // ---------------- Boot & RAF Loop ----------------
   let lastTs = performance.now();
   function frame(ts) {
-    if (state.mobileBlocked) return;
     const dt = Math.min(0.05, (ts - lastTs) / 1000);
     lastTs = ts;
     update(dt);
     render();
-    rafId = requestAnimationFrame(frame);
+    requestAnimationFrame(frame);
   }
 
   loadCurrentLevel();
@@ -1639,5 +1579,5 @@
     buttonText: "START",
   });
 
-  rafId = requestAnimationFrame(frame);
+  requestAnimationFrame(frame);
 })(window);
