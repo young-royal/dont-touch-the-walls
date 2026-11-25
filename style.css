@@ -1,0 +1,418 @@
+/* ============================================================
+   DON'T TOUCH THE WALLS — Retro Pixel Horror Styling
+   ============================================================ */
+
+:root {
+  --bg: #050406;
+  --panel: #0e0b10;
+  --border: #2c1e28;
+  --blood: #c71f2f;
+  --blood-bright: #ff2b3d;
+  --bone: #e3d7c8;
+  --muted: #8a7a7e;
+  --exit: #52e37d;
+  --amber: #f0b354;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  background: var(--bg);
+  color: var(--bone);
+  font-family: "Courier New", Courier, "Lucida Console", monospace;
+  overflow: hidden;
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+  width: 100vw;
+  height: 100vh;
+  background: radial-gradient(circle at center, #130b10 0%, #050406 80%);
+}
+
+/* ---------- HUD Bar ---------- */
+#hud {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 16px;
+  background: var(--panel);
+  border-bottom: 2px solid var(--border);
+  font-size: 13px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  flex-shrink: 0;
+  z-index: 20;
+}
+
+.hud-left, .hud-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.hud-brand {
+  color: var(--blood-bright);
+  font-weight: 900;
+  text-shadow: 2px 2px 0 #000;
+}
+
+.hud-sep {
+  color: var(--border);
+}
+
+#hud-floor {
+  color: var(--bone);
+  font-weight: 700;
+}
+
+.hud-stat {
+  color: var(--muted);
+}
+
+.hud-stat strong {
+  color: var(--amber);
+}
+
+.hud-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+#vol-slider {
+  width: 66px;
+  accent-color: var(--blood-bright);
+  cursor: pointer;
+}
+
+/* ---------- Pixel Buttons ---------- */
+.pixel-btn {
+  position: relative;
+  font-family: inherit;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: var(--bone);
+  background: #1a1016;
+  border: 2px solid var(--blood);
+  box-shadow:
+    inset 0 0 0 2px #090609,
+    0 3px 0 #000;
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: transform 0.06s steps(2), background 0.1s, border-color 0.1s;
+}
+
+.pixel-btn:hover {
+  background: #2f121b;
+  border-color: var(--blood-bright);
+  color: #fff;
+}
+
+.pixel-btn:active {
+  transform: translateY(2px);
+  box-shadow: inset 0 0 0 2px #090609, 0 1px 0 #000;
+}
+
+.pixel-btn.small {
+  font-size: 11px;
+  letter-spacing: 1px;
+  padding: 4px 8px;
+}
+
+/* Center START button — sits directly over (160, 100) */
+.start-btn {
+  min-width: 92px;
+  height: 38px;
+  padding: 0 16px;
+  font-size: 16px;
+  letter-spacing: 3px;
+  color: #fff;
+  background: linear-gradient(180deg, #7a101c 0%, #3d070e 100%);
+  border: 3px solid var(--blood-bright);
+  box-shadow:
+    0 0 0 3px #000,
+    0 0 24px rgba(255, 43, 61, 0.55),
+    inset 0 0 12px rgba(255, 80, 90, 0.35);
+  animation: pulseStart 1.5s infinite steps(6);
+}
+
+.start-btn:hover {
+  background: linear-gradient(180deg, #b31426 0%, #590a14 100%);
+  box-shadow:
+    0 0 0 3px #000,
+    0 0 32px rgba(255, 43, 61, 0.9),
+    inset 0 0 14px rgba(255, 160, 160, 0.45);
+}
+
+@keyframes pulseStart {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+
+/* ---------- Stage & CRT Frame ---------- */
+#stage-wrapper {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px;
+  min-height: 0;
+}
+
+#crt-frame {
+  position: relative;
+  /* Maintain strict 16:10 aspect ratio matching 320x200 logical canvas */
+  width: min(94vw, calc((100vh - 104px) * 1.6));
+  height: min(calc(94vw / 1.6), calc(100vh - 104px));
+  background: #000;
+  border: 4px solid #231820;
+  box-shadow:
+    0 0 0 3px #080508,
+    0 0 50px rgba(0, 0, 0, 0.95),
+    0 0 28px rgba(140, 14, 28, 0.25);
+  overflow: hidden;
+}
+
+#crt-frame.shaking {
+  animation: violentShake 0.08s infinite linear;
+}
+
+@keyframes violentShake {
+  0%   { transform: translate(0, 0) scale(1.02); }
+  20%  { transform: translate(-10px, 7px) scale(1.04); }
+  40%  { transform: translate(9px, -8px) scale(1.03); }
+  60%  { transform: translate(-8px, -6px) scale(1.05); }
+  80%  { transform: translate(11px, 6px) scale(1.02); }
+  100% { transform: translate(0, 0) scale(1.04); }
+}
+
+#game-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  image-rendering: -moz-crisp-edges;
+  image-rendering: -webkit-crisp-edges;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+}
+
+#game-canvas.hide-cursor {
+  cursor: none;
+}
+
+#crt-scanlines {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0) 0px,
+    rgba(0, 0, 0, 0) 2px,
+    rgba(0, 0, 0, 0.24) 3px,
+    rgba(0, 0, 0, 0.24) 4px
+  );
+  z-index: 6;
+}
+
+#crt-vignette {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(0, 0, 0, 0) 56%,
+    rgba(0, 0, 0, 0.72) 100%
+  );
+  z-index: 7;
+}
+
+/* ---------- Centered Overlay ---------- */
+#overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+  background: rgba(5, 3, 6, 0.62);
+  pointer-events: auto;
+  transition: opacity 0.15s steps(4);
+}
+
+#overlay.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.overlay-slot {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 90%;
+  text-align: center;
+}
+
+.overlay-slot.top {
+  top: 12%;
+}
+
+/* Exact mathematical center of the canvas */
+.overlay-slot.center {
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: auto;
+}
+
+.overlay-slot.bottom {
+  bottom: 11%;
+}
+
+#overlay-title {
+  font-size: clamp(20px, 3.6vw, 40px);
+  font-weight: 900;
+  letter-spacing: 4px;
+  color: var(--bone);
+  text-shadow:
+    3px 3px 0 #000,
+    -2px 0 0 rgba(255, 30, 50, 0.8),
+    2px 0 0 rgba(90, 220, 255, 0.25);
+  margin-bottom: 8px;
+}
+
+#overlay-subtitle {
+  font-size: clamp(11px, 1.5vw, 15px);
+  letter-spacing: 2px;
+  color: var(--amber);
+  text-shadow: 2px 2px 0 #000;
+}
+
+#overlay-note {
+  font-size: clamp(10px, 1.3vw, 13px);
+  letter-spacing: 1.5px;
+  color: #b7a7aa;
+  text-shadow: 2px 2px 0 #000;
+  margin-bottom: 10px;
+}
+
+#overlay-actions {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+}
+
+#overlay-actions.hidden {
+  display: none;
+}
+
+/* ---------- Countdown HUD ---------- */
+#countdown-hud {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 9;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10% 0 12%;
+}
+
+#countdown-hud.hidden {
+  display: none;
+}
+
+#countdown-num {
+  font-size: clamp(44px, 8vw, 90px);
+  font-weight: 900;
+  color: var(--blood-bright);
+  text-shadow:
+    4px 4px 0 #000,
+    0 0 24px rgba(255, 43, 61, 0.8);
+  line-height: 1;
+}
+
+#countdown-num.go {
+  color: var(--exit);
+  text-shadow:
+    4px 4px 0 #000,
+    0 0 24px rgba(82, 227, 125, 0.9);
+}
+
+#countdown-num.warn {
+  color: var(--amber);
+  font-size: clamp(22px, 3.6vw, 42px);
+}
+
+#countdown-msg {
+  font-size: clamp(12px, 1.7vw, 16px);
+  font-weight: 700;
+  letter-spacing: 3px;
+  color: var(--bone);
+  background: rgba(8, 5, 8, 0.78);
+  border: 2px solid var(--blood);
+  padding: 6px 14px;
+  text-shadow: 2px 2px 0 #000;
+}
+
+/* ---------- Scare Caption ---------- */
+#scare-caption {
+  pointer-events: none;
+  position: absolute;
+  bottom: 8%;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 12;
+  font-size: clamp(16px, 2.8vw, 28px);
+  font-weight: 900;
+  letter-spacing: 5px;
+  color: #fff;
+  background: rgba(140, 0, 12, 0.85);
+  border: 2px solid #fff;
+  padding: 4px 16px;
+  text-shadow: 3px 3px 0 #000;
+  white-space: nowrap;
+}
+
+#scare-caption.hidden {
+  display: none;
+}
+
+/* ---------- Footer ---------- */
+#footer-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 7px 14px;
+  background: var(--panel);
+  border-top: 2px solid var(--border);
+  font-size: 11px;
+  letter-spacing: 1.4px;
+  color: var(--muted);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+#hud-proximity.danger {
+  color: var(--blood-bright);
+  font-weight: 900;
+}
+
+#hud-proximity.tense {
+  color: var(--amber);
+  font-weight: 700;
+}
+
+.hidden {
+  display: none;
+}

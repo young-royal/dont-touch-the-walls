@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DON'T TOUCH THE WALLS // Pixel Maze Horror</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- Top Retro Pixel HUD -->
+    <header id="hud">
+      <div class="hud-left">
+        <span class="hud-brand">DON'T TOUCH THE WALLS</span>
+        <span class="hud-sep">|</span>
+        <span id="hud-floor">FLOOR I — THE CELLAR</span>
+      </div>
+      <div class="hud-right">
+        <span class="hud-stat">DEATHS: <strong id="hud-deaths">0</strong></span>
+        <span class="hud-stat">TIME: <strong id="hud-time">00.0s</strong></span>
+        <label class="hud-control" title="Audio Volume">
+          <button id="btn-mute" type="button" class="pixel-btn small" aria-label="Toggle Mute">SFX: ON</button>
+          <input id="vol-slider" type="range" min="0" max="1" step="0.05" value="0.8" aria-label="Volume" />
+        </label>
+        <button id="btn-strobe" type="button" class="pixel-btn small" title="Toggle Jumpscare Strobe Flash">FLASH: ON</button>
+        <button id="btn-mode" type="button" class="pixel-btn small" title="Switch Campaign / Endless Nightmare">MODE: CAMPAIGN</button>
+      </div>
+    </header>
+
+    <!-- Main CRT Stage -->
+    <main id="stage-wrapper">
+      <div id="crt-frame">
+        <canvas id="game-canvas" width="320" height="200"></canvas>
+        <div id="crt-scanlines" aria-hidden="true"></div>
+        <div id="crt-vignette" aria-hidden="true"></div>
+
+        <!-- Centered Overlay (ALWAYS places START button in the exact center of the maze) -->
+        <div id="overlay" class="overlay visible">
+          <!-- Title / Ready Header positioned ABOVE the center button -->
+          <div id="overlay-top" class="overlay-slot top">
+            <h1 id="overlay-title" class="glitch-text" data-text="DON'T TOUCH THE WALLS">DON'T TOUCH THE WALLS</h1>
+            <p id="overlay-subtitle">MOVE YOUR MOUSE TO THE CENTER &amp; PRESS START</p>
+          </div>
+
+          <!-- EXACT CENTER START BUTTON -->
+          <div id="overlay-center" class="overlay-slot center">
+            <button id="btn-start" type="button" class="pixel-btn start-btn">
+              <span class="btn-corners"></span>
+              START
+            </button>
+          </div>
+
+          <!-- Status / Instructions positioned BELOW the center button -->
+          <div id="overlay-bottom" class="overlay-slot bottom">
+            <p id="overlay-note">STAY INSIDE THE CORRIDORS. REACH THE GREEN RITUAL EXIT. TURN UP AUDIO.</p>
+            <div id="overlay-actions" class="hidden">
+              <button id="btn-restart-campaign" type="button" class="pixel-btn small">RESTART FLOOR I</button>
+              <button id="btn-try-endless" type="button" class="pixel-btn small">ENDLESS NIGHTMARE</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Countdown Banner (pointer-events: none so cursor moves freely) -->
+        <div id="countdown-hud" class="hidden" aria-live="polite">
+          <div id="countdown-num">3</div>
+          <div id="countdown-msg">HOLD MOUSE IN CENTER</div>
+        </div>
+
+        <!-- Live Scare Caption -->
+        <div id="scare-caption" class="hidden"></div>
+      </div>
+    </main>
+
+    <!-- Bottom Legend -->
+    <footer id="footer-bar">
+      <span>[MOUSE] GUIDE THE LANTERN</span>
+      <span>•</span>
+      <span>DON'T TOUCH WALLS OR LEAVE THE SCREEN</span>
+      <span>•</span>
+      <span id="hud-proximity">PULSE: CALM</span>
+      <span>•</span>
+      <span id="hud-best">BEST: --</span>
+    </footer>
+  </div>
+
+  <script src="audio.js"></script>
+  <script src="levels.js"></script>
+  <script src="jumpscares.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>
