@@ -591,3 +591,74 @@ html, body {
 .hidden {
   display: none;
 }
+
+/* ---------- Phone / Touch Device Blocker ---------- */
+#mobile-block {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: radial-gradient(circle at center, #18060c 0%, #050306 80%);
+  text-align: center;
+}
+
+.mobile-block-box {
+  max-width: 420px;
+  padding: 26px 22px;
+  background: #0e090d;
+  border: 3px solid var(--blood-bright);
+  box-shadow:
+    0 0 0 3px #000,
+    0 0 36px rgba(255, 43, 61, 0.35);
+}
+
+.mobile-block-tag {
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 3px;
+  color: var(--blood-bright);
+  margin-bottom: 12px;
+  text-shadow: 2px 2px 0 #000;
+}
+
+.mobile-block-box h2 {
+  font-size: 24px;
+  font-weight: 900;
+  letter-spacing: 3px;
+  color: var(--bone);
+  margin-bottom: 12px;
+  text-shadow: 3px 3px 0 #000;
+}
+
+.mobile-block-box p {
+  font-size: 13px;
+  line-height: 1.6;
+  letter-spacing: 1.4px;
+  color: #c7b6ba;
+  margin-bottom: 8px;
+}
+
+.mobile-block-sub {
+  color: var(--amber) !important;
+  margin-bottom: 0 !important;
+}
+
+@media (hover: none), (pointer: coarse) {
+  #mobile-block {
+    display: flex;
+  }
+  #app {
+    display: none;
+  }
+}
+
+body.mobile-blocked #mobile-block {
+  display: flex;
+}
+
+body.mobile-blocked #app {
+  display: none;
+}

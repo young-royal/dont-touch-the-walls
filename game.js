@@ -106,7 +106,25 @@
     adminEnabled: false,
     adminInvincible: false,
     keyBuffer: "",
+
+    // Phone / touch blocker
+    mobileBlocked: window.matchMedia("(hover: none), (pointer: coarse)").matches,
   };
+
+  function blockTouchDevice() {
+    if (state.mobileBlocked) return;
+    state.mobileBlocked = true;
+    document.body.classList.add("mobile-blocked");
+    crtFrame.classList.remove("shaking");
+    resetTimerBar();
+    setCursorHidden(false);
+    audio.updateTension(0.016, 0, false);
+    state.phase = "TITLE";
+  }
+
+  if (state.mobileBlocked) {
+    document.body.classList.add("mobile-blocked");
+  }
 
   function spawnLevelMobs() {
     const specs = (state.levelData && state.levelData.def.mobs) || [];
@@ -320,6 +338,7 @@
 
   // Start Countdown (triggered by clicking exact-center START button)
   function beginCountdown(clickEvent) {
+    if (state.mobileBlocked) return;
     audio.init();
     audio.playClick();
 
@@ -442,6 +461,12 @@
 
   // ---------------- Pointer Events ----------------
   function handlePointerMove(e) {
+    if (e.pointerType === "touch") {
+      blockTouchDevice();
+      return;
+    }
+    if (state.mobileBlocked) return;
+
     const [lx, ly] = eventToLogical(e);
     state.pointerInside = lx >= 0 && lx <= W && ly >= 0 && ly <= H;
 
@@ -518,6 +543,16 @@
       triggerJumpscare("YOU CANNOT FLEE");
     }
   }
+
+  window.addEventListener(
+    "pointerdown",
+    (e) => {
+      if (e.pointerType === "touch") {
+        blockTouchDevice();
+      }
+    },
+    true
+  );
 
   canvas.addEventListener("pointermove", handlePointerMove);
   canvas.addEventListener("pointerleave", handlePointerLeave);
