@@ -4,6 +4,26 @@
 (function (global) {
   "use strict";
 
+  // Hard-disable the entire game immediately on phones / touch-only devices
+  function isPhoneDevice() {
+    const coarseOrNoHover =
+      window.matchMedia &&
+      window.matchMedia("(hover: none), (pointer: coarse)").matches;
+    const uaMobile =
+      /Android|iPhone|iPad|iPod|webOS|BlackBerry|IEMobile|Opera Mini/i.test(
+        navigator.userAgent || ""
+      );
+    const chMobile = !!(navigator.userAgentData && navigator.userAgentData.mobile);
+    return coarseOrNoHover || uaMobile || chMobile;
+  }
+
+  if (isPhoneDevice()) {
+    document.body.classList.add("mobile-blocked");
+    const appEl = document.getElementById("app");
+    if (appEl) appEl.remove();
+    return;
+  }
+
   const { W, H, CX, CY, CATEGORIES, CAMPAIGN_LEVELS, getCategory, buildLevelData } =
     global.MazeLevels;
 
@@ -108,22 +128,26 @@
     keyBuffer: "",
 
     // Phone / touch blocker
-    mobileBlocked: window.matchMedia("(hover: none), (pointer: coarse)").matches,
+    mobileBlocked: false,
   };
+
+  let rafId = null;
 
   function blockTouchDevice() {
     if (state.mobileBlocked) return;
     state.mobileBlocked = true;
-    document.body.classList.add("mobile-blocked");
-    crtFrame.classList.remove("shaking");
-    resetTimerBar();
-    setCursorHidden(false);
+    if (rafId !== null) {
+      cancelAnimationFrame(rafId);
+      rafId = null;
+    }
+    audio.setMuted(true);
     audio.updateTension(0.016, 0, false);
-    state.phase = "TITLE";
-  }
-
-  if (state.mobileBlocked) {
+    if (audio.ctx && audio.ctx.state === "running") {
+      audio.ctx.suspend().catch(() => {});
+    }
     document.body.classList.add("mobile-blocked");
+    const appEl = document.getElementById("app");
+    if (appEl) appEl.remove();
   }
 
   function spawnLevelMobs() {
@@ -1599,11 +1623,12 @@
   // ---------------- Boot & RAF Loop ----------------
   let lastTs = performance.now();
   function frame(ts) {
+    if (state.mobileBlocked) return;
     const dt = Math.min(0.05, (ts - lastTs) / 1000);
     lastTs = ts;
     update(dt);
     render();
-    requestAnimationFrame(frame);
+    rafId = requestAnimationFrame(frame);
   }
 
   loadCurrentLevel();
@@ -1614,5 +1639,5 @@
     buttonText: "START",
   });
 
-  requestAnimationFrame(frame);
+  rafId = requestAnimationFrame(frame);
 })(window);
