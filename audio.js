@@ -325,6 +325,187 @@
       osc.stop(now + 0.24);
     }
 
+    playDashCue() {
+      if (!this.ctx) return;
+      const now = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator();
+      const g = this.ctx.createGain();
+      osc.type = "sawtooth";
+      osc.frequency.setValueAtTime(280, now);
+      osc.frequency.exponentialRampToValueAtTime(920, now + 0.16);
+      osc.frequency.exponentialRampToValueAtTime(190, now + 0.34);
+
+      const filt = this.ctx.createBiquadFilter();
+      filt.type = "bandpass";
+      filt.frequency.setValueAtTime(1200, now);
+      filt.Q.setValueAtTime(3, now);
+
+      g.gain.setValueAtTime(0.001, now);
+      g.gain.linearRampToValueAtTime(0.22, now + 0.04);
+      g.gain.exponentialRampToValueAtTime(0.001, now + 0.36);
+
+      osc.connect(filt);
+      filt.connect(g);
+      g.connect(this.compressor);
+      osc.start(now);
+      osc.stop(now + 0.38);
+    }
+
+    // Eerie Spirit-like spectral phase whoosh (DbD Spirit phasing cue)
+    playPhaseCue(manifesting) {
+      if (!this.ctx) return;
+      const now = this.ctx.currentTime;
+      const dur = 0.55;
+
+      const osc = this.ctx.createOscillator();
+      const g = this.ctx.createGain();
+      osc.type = "sine";
+      if (manifesting) {
+        osc.frequency.setValueAtTime(320, now);
+        osc.frequency.exponentialRampToValueAtTime(760, now + 0.14);
+        osc.frequency.exponentialRampToValueAtTime(210, now + dur);
+      } else {
+        osc.frequency.setValueAtTime(620, now);
+        osc.frequency.exponentialRampToValueAtTime(175, now + dur);
+      }
+
+      g.gain.setValueAtTime(0.001, now);
+      g.gain.linearRampToValueAtTime(0.16, now + 0.06);
+      g.gain.exponentialRampToValueAtTime(0.001, now + dur);
+
+      osc.connect(g);
+      g.connect(this.compressor);
+      osc.start(now);
+      osc.stop(now + dur + 0.02);
+
+      if (this.noiseBuffer) {
+        const src = this.ctx.createBufferSource();
+        src.buffer = this.noiseBuffer;
+        const bp = this.ctx.createBiquadFilter();
+        bp.type = "bandpass";
+        bp.frequency.setValueAtTime(manifesting ? 1800 : 900, now);
+        bp.frequency.exponentialRampToValueAtTime(manifesting ? 550 : 2100, now + dur);
+        bp.Q.setValueAtTime(5.5, now);
+
+        const ng = this.ctx.createGain();
+        ng.gain.setValueAtTime(0.001, now);
+        ng.gain.linearRampToValueAtTime(0.24, now + 0.08);
+        ng.gain.exponentialRampToValueAtTime(0.001, now + dur);
+
+        src.connect(bp);
+        bp.connect(ng);
+        ng.connect(this.compressor);
+        src.start(now);
+        src.stop(now + dur + 0.02);
+      }
+    }
+
+    // Deep ominous whisper & phantom bell swell for Act finale opening announcements
+    playAnnouncement() {
+      this.init();
+      if (!this.ctx) return;
+      const now = this.ctx.currentTime;
+      const dur = 2.6;
+
+      // Deep sub-bass drop
+      const sub = this.ctx.createOscillator();
+      const subG = this.ctx.createGain();
+      sub.type = "sine";
+      sub.frequency.setValueAtTime(64, now);
+      sub.frequency.exponentialRampToValueAtTime(30, now + dur);
+      subG.gain.setValueAtTime(0.001, now);
+      subG.gain.linearRampToValueAtTime(0.45, now + 0.2);
+      subG.gain.exponentialRampToValueAtTime(0.001, now + dur);
+      sub.connect(subG);
+      subG.connect(this.compressor);
+      sub.start(now);
+      sub.stop(now + dur + 0.05);
+
+      // Eerie dissonant phantom chord (minor second)
+      [220, 233.08].forEach((freq) => {
+        const osc = this.ctx.createOscillator();
+        const g = this.ctx.createGain();
+        osc.type = "triangle";
+        osc.frequency.setValueAtTime(freq, now);
+        osc.frequency.linearRampToValueAtTime(freq * 0.96, now + dur);
+        g.gain.setValueAtTime(0.001, now);
+        g.gain.linearRampToValueAtTime(0.11, now + 0.35);
+        g.gain.exponentialRampToValueAtTime(0.0008, now + dur);
+        osc.connect(g);
+        g.connect(this.compressor);
+        osc.start(now);
+        osc.stop(now + dur + 0.05);
+      });
+
+      // Breathy dark whisper noise sweep
+      if (this.noiseBuffer) {
+        const src = this.ctx.createBufferSource();
+        src.buffer = this.noiseBuffer;
+        const bp = this.ctx.createBiquadFilter();
+        bp.type = "bandpass";
+        bp.frequency.setValueAtTime(600, now);
+        bp.frequency.exponentialRampToValueAtTime(1600, now + 1.0);
+        bp.frequency.exponentialRampToValueAtTime(420, now + dur);
+        bp.Q.setValueAtTime(4.5, now);
+
+        const ng = this.ctx.createGain();
+        ng.gain.setValueAtTime(0.001, now);
+        ng.gain.linearRampToValueAtTime(0.16, now + 0.4);
+        ng.gain.exponentialRampToValueAtTime(0.001, now + dur);
+
+        src.connect(bp);
+        bp.connect(ng);
+        ng.connect(this.compressor);
+        src.start(now);
+        src.stop(now + dur);
+      }
+    }
+
+    // Haunting, cathartic ethereal chord fanfare for completing all 9 chapters
+    playVictory() {
+      this.init();
+      if (!this.ctx) return;
+      const now = this.ctx.currentTime;
+
+      // Ethereal rising bell arpeggio resolving from D minor into bright D major9
+      const notes = [293.66, 349.23, 440.0, 554.37, 587.33, 739.99, 880.0];
+      notes.forEach((freq, idx) => {
+        const t = now + idx * 0.16;
+        const osc = this.ctx.createOscillator();
+        const g = this.ctx.createGain();
+        osc.type = "triangle";
+        osc.frequency.setValueAtTime(freq, t);
+        g.gain.setValueAtTime(0.001, t);
+        g.gain.linearRampToValueAtTime(0.22, t + 0.03);
+        g.gain.exponentialRampToValueAtTime(0.0006, t + 2.4);
+        osc.connect(g);
+        g.connect(this.compressor);
+        osc.start(t);
+        osc.stop(t + 2.5);
+      });
+
+      // Warm dark-to-dawn pad swell
+      [146.83, 220.0, 369.99].forEach((freq) => {
+        const osc = this.ctx.createOscillator();
+        const filt = this.ctx.createBiquadFilter();
+        const g = this.ctx.createGain();
+        osc.type = "sawtooth";
+        osc.frequency.setValueAtTime(freq, now);
+        filt.type = "lowpass";
+        filt.frequency.setValueAtTime(220, now);
+        filt.frequency.exponentialRampToValueAtTime(980, now + 1.4);
+        filt.frequency.exponentialRampToValueAtTime(320, now + 3.6);
+        g.gain.setValueAtTime(0.001, now);
+        g.gain.linearRampToValueAtTime(0.09, now + 0.7);
+        g.gain.exponentialRampToValueAtTime(0.0008, now + 3.7);
+        osc.connect(filt);
+        filt.connect(g);
+        g.connect(this.compressor);
+        osc.start(now);
+        osc.stop(now + 3.8);
+      });
+    }
+
     playLevelClear() {
       this.init();
       if (!this.ctx) return;

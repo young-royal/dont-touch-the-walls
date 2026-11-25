@@ -84,12 +84,22 @@
     },
   ];
 
-  // 5 Handcrafted, verified-solvable tight pixel mazes (all start at 160, 100)
+  // 3 Campaign Categories (3 chapters each = 9 chapters total)
+  const CATEGORIES = [
+    { id: 1, short: "I", name: "ACT I — THE CORRIDORS" },
+    { id: 2, short: "II", name: "ACT II — THE LABYRINTH" },
+    { id: 3, short: "III", name: "ACT III — THE HUNT" },
+  ];
+
+  // 9 Chapters across 3 Categories (all start at exact center 160, 100)
   const CAMPAIGN_LEVELS = [
+    // ================= ACT I — THE CORRIDORS (1, 2, 3) =================
     {
       id: 1,
+      category: 1,
       name: "FLOOR I — THE CELLAR",
-      subtitle: "STAY OFF THE DAMP STONE. REACH THE GREEN SIGIL.",
+      subtitle: "SOMETHING STIRS BENEATH THE DAMP STONE. DO NOT WAKE IT.",
+      timeLimit: 10,
       corridorWidth: 18,
       sanctuaryRadius: 16,
       exitRadius: 11,
@@ -125,8 +135,10 @@
     },
     {
       id: 2,
+      category: 1,
       name: "FLOOR II — THE CATACOMBS",
       subtitle: "THE WALLS ARE WATCHING. KEEP A STEADY HAND.",
+      timeLimit: 13,
       corridorWidth: 14,
       sanctuaryRadius: 15,
       exitRadius: 10,
@@ -169,8 +181,11 @@
     },
     {
       id: 3,
+      category: 1,
       name: "FLOOR III — FLESH CORRIDOR",
       subtitle: "IT BREATHES. DON'T LET YOUR FINGERS TREMBLE.",
+      announcement: "Do you have enough time?",
+      timeLimit: 30,
       corridorWidth: 11,
       sanctuaryRadius: 15,
       exitRadius: 10,
@@ -215,10 +230,13 @@
         ],
       ],
     },
+    // ================= ACT II — THE LABYRINTH (4, 5, 6) =================
     {
       id: 4,
+      category: 2,
       name: "FLOOR IV — THE NEEDLE",
-      subtitle: "SPIRAL OUTWARD. RAZOR CORRIDORS AHEAD.",
+      subtitle: "THE THREAD NARROWS. ONLY THE STILL MAY PASS THROUGH THE EYE.",
+      timeLimit: 45,
       corridorWidth: 9,
       sanctuaryRadius: 14,
       exitRadius: 9,
@@ -254,8 +272,10 @@
     },
     {
       id: 5,
+      category: 2,
       name: "FLOOR V — THE ABYSS",
-      subtitle: "FINAL TRIAL. ONE SLIP AND IT FINDS YOU.",
+      subtitle: "THE DARKNESS CLOSES TO A RAZOR'S EDGE. DO NOT BREATHE TOO LOUD.",
+      timeLimit: 40,
       corridorWidth: 7,
       sanctuaryRadius: 14,
       exitRadius: 9,
@@ -289,7 +309,233 @@
         ],
       ],
     },
+    {
+      id: 6,
+      category: 2,
+      name: "FLOOR VI — THE LOST LABYRINTH",
+      subtitle: "MANY HOLLOWS WAIT IN THE DARK. ONLY ONE IS THE WAY OUT.",
+      announcement: "Can you find me in the dark?",
+      timeLimit: 55,
+      corridorWidth: 10,
+      sanctuaryRadius: 12,
+      exitRadius: 8,
+      lightRadius: 56,
+      ambientLight: 0.13,
+      hideExitGlow: true,
+      revealExitDist: 36,
+      fakeExitCount: 5,
+      palette: PALETTES[1],
+      seed: 6661337,
+      mazeGrid: { cols: 15, rows: 9, step: 20, startCol: 7, startRow: 4 },
+      exitPos: [20, 20], // auto-placed at furthest BFS dead-end from center
+      paths: [],
+    },
+    // ================= ACT III — THE HUNT (7, 8, 9) =================
+    {
+      id: 7,
+      category: 3,
+      name: "FLOOR VII — THE STALKING MAZE",
+      subtitle: "SOMETHING FOLLOWS YOUR LIGHT THROUGH THE WALLS. DO NOT STOP MOVING.",
+      timeLimit: 32,
+      corridorWidth: 12,
+      sanctuaryRadius: 13,
+      exitRadius: 9,
+      lightRadius: 66,
+      ambientLight: 0.21,
+      palette: PALETTES[0],
+      seed: 7071337,
+      mazeGrid: { cols: 13, rows: 7, step: 22, startCol: 6, startRow: 3 },
+      exitPos: [28, 34], // auto-placed at furthest BFS cell from center
+      mobs: [
+        { type: "stalker", x: 28, y: 34, speed: 28, radius: 5 },
+      ],
+      paths: [],
+    },
+    {
+      id: 8,
+      category: 3,
+      name: "FLOOR VIII — BLOOD LABYRINTH",
+      subtitle: "IT SCENTS YOUR FEAR THROUGH THE STONE. WEAVE PAST ITS LUNGE.",
+      timeLimit: 38,
+      corridorWidth: 11,
+      sanctuaryRadius: 12,
+      exitRadius: 8,
+      lightRadius: 62,
+      ambientLight: 0.19,
+      palette: PALETTES[2],
+      seed: 8081337,
+      mazeGrid: { cols: 15, rows: 9, step: 20, startCol: 7, startRow: 4 },
+      exitPos: [20, 180], // auto-placed at furthest BFS cell from center
+      mobs: [
+        { type: "dasher", x: 296, y: 24, speed: 22, dashSpeed: 98, radius: 5 },
+      ],
+      paths: [],
+    },
+    {
+      id: 9,
+      category: 3,
+      name: "FLOOR IX — THE FINAL HUNT",
+      subtitle: "ONLY A HUSK REMAINS WHERE IT STOOD. LISTEN TO THE SILENCE — IT IS ALREADY BEHIND YOU.",
+      announcement: "Do you feel lonely?",
+      timeLimit: 44,
+      corridorWidth: 10,
+      sanctuaryRadius: 12,
+      exitRadius: 8,
+      lightRadius: 58,
+      ambientLight: 0.17,
+      palette: PALETTES[4],
+      seed: 9091337,
+      mazeGrid: { cols: 15, rows: 9, step: 20, startCol: 7, startRow: 4 },
+      exitPos: [300, 180], // auto-placed at furthest BFS cell from center
+      mobs: [
+        { type: "spirit", x: 24, y: 176, speed: 24, phaseSpeed: 40, radius: 5 },
+      ],
+      paths: [],
+    },
   ];
+
+  // Carve a filled rectangle on mask
+  function carveRect(mask, rx, ry, rw, rh, val) {
+    const x0 = Math.max(1, Math.floor(rx));
+    const x1 = Math.min(W - 2, Math.ceil(rx + rw));
+    const y0 = Math.max(1, Math.floor(ry));
+    const y1 = Math.min(H - 2, Math.ceil(ry + rh));
+    for (let y = y0; y < y1; y++) {
+      for (let x = x0; x < x1; x++) {
+        mask[y * W + x] = val;
+      }
+    }
+  }
+
+  // Build deterministic real branching maze for Floor VI (with optional fake exit dead-ends)
+  function buildGridMazePaths(cfg, seed, fakeExitCount) {
+    const { cols, rows, step, startCol, startRow } = cfg;
+    const rand = mulberry32(seed);
+    const visited = Array.from({ length: rows }, () => new Uint8Array(cols));
+    const adj = Array.from({ length: rows }, () =>
+      Array.from({ length: cols }, () => [])
+    );
+    const paths = [];
+    const stack = [[startCol, startRow]];
+    visited[startRow][startCol] = 1;
+
+    const dirs = [
+      [1, 0],
+      [-1, 0],
+      [0, 1],
+      [0, -1],
+    ];
+    const cellToXY = (c, r) => [
+      CX + (c - startCol) * step,
+      CY + (r - startRow) * step,
+    ];
+
+    while (stack.length > 0) {
+      const [c, r] = stack[stack.length - 1];
+      const neighbors = [];
+      for (let i = 0; i < 4; i++) {
+        const nc = c + dirs[i][0];
+        const nr = r + dirs[i][1];
+        if (nc >= 0 && nc < cols && nr >= 0 && nr < rows && !visited[nr][nc]) {
+          neighbors.push([nc, nr]);
+        }
+      }
+      if (neighbors.length === 0) {
+        stack.pop();
+      } else {
+        const [nc, nr] = neighbors[(rand() * neighbors.length) | 0];
+        visited[nr][nc] = 1;
+        adj[r][c].push([nc, nr]);
+        adj[nr][nc].push([c, r]);
+        paths.push([cellToXY(c, r), cellToXY(nc, nr)]);
+        stack.push([nc, nr]);
+      }
+    }
+
+    // Optional braiding: open extra loop corridors so players can juke hunting mobs
+    const braidChance = cfg.braidChance || 0;
+    if (braidChance > 0) {
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const check = [
+            [c + 1, r],
+            [c, r + 1],
+          ];
+          for (let k = 0; k < check.length; k++) {
+            const [nc, nr] = check[k];
+            if (nc >= cols || nr >= rows) continue;
+            const already = adj[r][c].some(([ac, ar]) => ac === nc && ar === nr);
+            if (!already && rand() < braidChance) {
+              adj[r][c].push([nc, nr]);
+              adj[nr][nc].push([c, r]);
+              paths.push([cellToXY(c, r), cellToXY(nc, nr)]);
+            }
+          }
+        }
+      }
+    }
+
+    // BFS from center to place exit at the furthest cell
+    const distGrid = Array.from({ length: rows }, () =>
+      new Int16Array(cols).fill(-1)
+    );
+    const q = [[startCol, startRow]];
+    distGrid[startRow][startCol] = 0;
+    let bestCell = [startCol, startRow];
+    let bestDist = 0;
+
+    for (let qi = 0; qi < q.length; qi++) {
+      const [c, r] = q[qi];
+      const d = distGrid[r][c];
+      if (d > bestDist) {
+        bestDist = d;
+        bestCell = [c, r];
+      }
+      for (const [nc, nr] of adj[r][c]) {
+        if (distGrid[nr][nc] === -1) {
+          distGrid[nr][nc] = d + 1;
+          q.push([nc, nr]);
+        }
+      }
+    }
+
+    const exitPos = cellToXY(bestCell[0], bestCell[1]);
+
+    // Pick well-spaced dead-end cells for fake exit holes (no green)
+    const fakeExits = [];
+    if (fakeExitCount > 0) {
+      const deadEnds = [];
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          if (c === startCol && r === startRow) continue;
+          if (c === bestCell[0] && r === bestCell[1]) continue;
+          if (adj[r][c].length === 1 && distGrid[r][c] >= 4) {
+            deadEnds.push({ c, r, d: distGrid[r][c], pos: cellToXY(c, r) });
+          }
+        }
+      }
+      deadEnds.sort((a, b) => b.d - a.d);
+
+      for (let i = 0; i < deadEnds.length && fakeExits.length < fakeExitCount; i++) {
+        const cand = deadEnds[i].pos;
+        if (Math.hypot(cand[0] - exitPos[0], cand[1] - exitPos[1]) < 48) continue;
+        if (Math.hypot(cand[0] - CX, cand[1] - CY) < 42) continue;
+        let tooClose = false;
+        for (let j = 0; j < fakeExits.length; j++) {
+          const p = fakeExits[j].pos;
+          if (Math.hypot(cand[0] - p[0], cand[1] - p[1]) < 48) {
+            tooClose = true;
+            break;
+          }
+        }
+        if (!tooClose) {
+          fakeExits.push({ pos: cand, radius: 8 });
+        }
+      }
+    }
+
+    return { paths, exitPos, fakeExits };
+  }
 
   // Carve a filled circle on mask
   function carveCircle(mask, cx, cy, r, val) {
@@ -553,9 +799,48 @@
     const mask = new Uint8Array(W * H);
     const radius = levelDef.corridorWidth / 2;
 
+    // Resolve procedural deterministic grid maze if defined (Chapter 6)
+    let paths = levelDef.paths || [];
+    let resolvedExit = levelDef.exitPos;
+    let resolvedFakeExits = levelDef.fakeExits || [];
+    if (levelDef.mazeGrid) {
+      const built = buildGridMazePaths(
+        levelDef.mazeGrid,
+        levelDef.seed || 6661337,
+        levelDef.fakeExitCount || 0
+      );
+      paths = built.paths;
+      resolvedExit = built.exitPos;
+      if (built.fakeExits && built.fakeExits.length > 0) {
+        resolvedFakeExits = built.fakeExits;
+      }
+    }
+
+    const resolvedDef = {
+      ...levelDef,
+      exitPos: resolvedExit,
+      fakeExits: resolvedFakeExits,
+    };
+
+    // Carve open arena rectangles first (Chapters 7, 8, 9)
+    if (resolvedDef.openRects) {
+      for (let i = 0; i < resolvedDef.openRects.length; i++) {
+        const [rx, ry, rw, rh] = resolvedDef.openRects[i];
+        carveRect(mask, rx, ry, rw, rh, 1);
+      }
+    }
+
+    // Place solid pillar/wall obstacles inside arenas
+    if (resolvedDef.solidRects) {
+      for (let i = 0; i < resolvedDef.solidRects.length; i++) {
+        const [rx, ry, rw, rh] = resolvedDef.solidRects[i];
+        carveRect(mask, rx, ry, rw, rh, 0);
+      }
+    }
+
     // Carve all corridor polylines
-    for (let p = 0; p < levelDef.paths.length; p++) {
-      const poly = levelDef.paths[p];
+    for (let p = 0; p < paths.length; p++) {
+      const poly = paths[p];
       for (let i = 0; i < poly.length - 1; i++) {
         carveSegment(
           mask,
@@ -570,12 +855,20 @@
     }
 
     // Carve safe center spawn chamber at EXACT (160, 100)
-    carveCircle(mask, CX, CY, levelDef.sanctuaryRadius, 1);
+    carveCircle(mask, CX, CY, resolvedDef.sanctuaryRadius, 1);
 
     // Carve Exit Chamber (walkable rim + exit trigger core)
-    const [ex, ey] = levelDef.exitPos;
-    carveCircle(mask, ex, ey, levelDef.exitRadius + 1, 1);
-    carveCircle(mask, ex, ey, levelDef.exitRadius - 1, 2);
+    const [ex, ey] = resolvedDef.exitPos;
+    carveCircle(mask, ex, ey, resolvedDef.exitRadius + 1, 1);
+    carveCircle(mask, ex, ey, resolvedDef.exitRadius - 1, 2);
+
+    // Carve Fake Exit Holes (identical empty circular holes with nothing in them)
+    if (resolvedDef.fakeExits) {
+      for (let i = 0; i < resolvedDef.fakeExits.length; i++) {
+        const fe = resolvedDef.fakeExits[i];
+        carveCircle(mask, fe.pos[0], fe.pos[1], fe.radius + 1, 1);
+      }
+    }
 
     // Guarantee outer 2px border is ALWAYS lethal wall
     for (let x = 0; x < W; x++) {
@@ -592,12 +885,12 @@
     }
 
     const wallDist = computeWallDistance(mask);
-    const rand = mulberry32(levelDef.seed || levelDef.id * 7919 + 1337);
-    const eyes = placeWallEyes(mask, rand, 6 + Math.min(5, levelDef.id));
-    const bakedCanvas = bakeMazeCanvas(levelDef, mask, wallDist, rand);
+    const rand = mulberry32(resolvedDef.seed || resolvedDef.id * 7919 + 1337);
+    const eyes = placeWallEyes(mask, rand, 6 + Math.min(5, resolvedDef.id));
+    const bakedCanvas = bakeMazeCanvas(resolvedDef, mask, wallDist, rand);
 
     return {
-      def: levelDef,
+      def: resolvedDef,
       mask,
       wallDist,
       eyes,
@@ -605,102 +898,8 @@
     };
   }
 
-  // Procedural tight pixel maze for Endless Nightmare mode
-  function generateEndlessLevel(floorNum) {
-    const cols = 15;
-    const rows = 9;
-    const step = 20;
-    const startCol = 7; // maps to exact CX = 160
-    const startRow = 4; // maps to exact CY = 100
-
-    const seed = (Date.now() ^ (floorNum * 2654435761)) >>> 0;
-    const rand = mulberry32(seed);
-
-    const visited = Array.from({ length: rows }, () => new Uint8Array(cols));
-    const adj = Array.from({ length: rows }, () =>
-      Array.from({ length: cols }, () => [])
-    );
-    const paths = [];
-
-    // Recursive backtracker (iterative stack)
-    const stack = [[startCol, startRow]];
-    visited[startRow][startCol] = 1;
-
-    const dirs = [
-      [1, 0],
-      [-1, 0],
-      [0, 1],
-      [0, -1],
-    ];
-
-    const cellToXY = (c, r) => [
-      CX + (c - startCol) * step,
-      CY + (r - startRow) * step,
-    ];
-
-    while (stack.length > 0) {
-      const [c, r] = stack[stack.length - 1];
-      const neighbors = [];
-      for (let i = 0; i < 4; i++) {
-        const nc = c + dirs[i][0];
-        const nr = r + dirs[i][1];
-        if (nc >= 0 && nc < cols && nr >= 0 && nr < rows && !visited[nr][nc]) {
-          neighbors.push([nc, nr]);
-        }
-      }
-      if (neighbors.length === 0) {
-        stack.pop();
-      } else {
-        const [nc, nr] = neighbors[(rand() * neighbors.length) | 0];
-        visited[nr][nc] = 1;
-        adj[r][c].push([nc, nr]);
-        adj[nr][nc].push([c, r]);
-        paths.push([cellToXY(c, r), cellToXY(nc, nr)]);
-        stack.push([nc, nr]);
-      }
-    }
-
-    // BFS from center to place Exit Portal at the furthest cell
-    const distGrid = Array.from({ length: rows }, () => new Int16Array(cols).fill(-1));
-    const q = [[startCol, startRow]];
-    distGrid[startRow][startCol] = 0;
-    let bestCell = [startCol, startRow];
-    let bestDist = 0;
-
-    for (let qi = 0; qi < q.length; qi++) {
-      const [c, r] = q[qi];
-      const d = distGrid[r][c];
-      if (d > bestDist) {
-        bestDist = d;
-        bestCell = [c, r];
-      }
-      for (const [nc, nr] of adj[r][c]) {
-        if (distGrid[nr][nc] === -1) {
-          distGrid[nr][nc] = d + 1;
-          q.push([nc, nr]);
-        }
-      }
-    }
-
-    const corridorWidth = Math.max(7, 11 - Math.floor((floorNum - 1) / 2));
-    const pal = PALETTES[(floorNum - 1) % PALETTES.length];
-
-    const levelDef = {
-      id: 100 + floorNum,
-      seed,
-      name: `NIGHTMARE DEPTH ${floorNum}`,
-      subtitle: "PROCEDURAL LABYRINTH. NO MERCY.",
-      corridorWidth,
-      sanctuaryRadius: 12,
-      exitRadius: 9,
-      lightRadius: Math.max(44, 62 - floorNum * 2),
-      ambientLight: Math.max(0.12, 0.22 - floorNum * 0.015),
-      palette: pal,
-      exitPos: cellToXY(bestCell[0], bestCell[1]),
-      paths,
-    };
-
-    return buildLevelData(levelDef);
+  function getCategory(catId) {
+    return CATEGORIES.find((c) => c.id === catId) || CATEGORIES[0];
   }
 
   global.MazeLevels = {
@@ -708,8 +907,9 @@
     H,
     CX,
     CY,
+    CATEGORIES,
     CAMPAIGN_LEVELS,
+    getCategory,
     buildLevelData,
-    generateEndlessLevel,
   };
 })(window);

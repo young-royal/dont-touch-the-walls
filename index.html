@@ -3,29 +3,26 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>DON'T TOUCH THE WALLS // Pixel Maze Horror</title>
+  <title>DON'T TOUCH THE WALLS</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <div id="app">
     <!-- Top Retro Pixel HUD -->
     <header id="hud">
-      <div class="hud-left">
-        <span class="hud-brand">DON'T TOUCH THE WALLS</span>
-        <span class="hud-sep">|</span>
-        <span id="hud-floor">FLOOR I — THE CELLAR</span>
+      <div id="timer-bar" class="hidden" aria-hidden="true">
+        <div id="timer-bar-fill"></div>
       </div>
-      <div class="hud-right">
-        <span class="hud-stat">DEATHS: <strong id="hud-deaths">0</strong></span>
-        <span class="hud-stat">TIME: <strong id="hud-time">00.0s</strong></span>
-        <label class="hud-control" title="Audio Volume">
-          <button id="btn-mute" type="button" class="pixel-btn small" aria-label="Toggle Mute">SFX: ON</button>
-          <input id="vol-slider" type="range" min="0" max="1" step="0.05" value="0.8" aria-label="Volume" />
-        </label>
-        <button id="btn-strobe" type="button" class="pixel-btn small" title="Toggle Jumpscare Strobe Flash">FLASH: ON</button>
-        <button id="btn-mode" type="button" class="pixel-btn small" title="Switch Campaign / Endless Nightmare">MODE: CAMPAIGN</button>
-      </div>
+      <span class="hud-brand">DON'T TOUCH THE WALLS</span>
     </header>
+
+    <!-- Secret Admin Level Selector (unlocked via keyboard code) -->
+    <div id="admin-bar" class="hidden" aria-label="Admin Level Selector">
+      <span class="admin-tag">ADMIN MODE:</span>
+      <div id="admin-levels"></div>
+      <button id="btn-admin-invincible" type="button" class="pixel-btn small" title="Toggle Invincibility (I)">INVINCIBLE (I): OFF</button>
+      <button id="btn-admin-close" type="button" class="pixel-btn small">HIDE</button>
+    </div>
 
     <!-- Main CRT Stage -->
     <main id="stage-wrapper">
@@ -38,6 +35,7 @@
         <div id="overlay" class="overlay visible">
           <!-- Title / Ready Header positioned ABOVE the center button -->
           <div id="overlay-top" class="overlay-slot top">
+            <div id="overlay-category"></div>
             <h1 id="overlay-title" class="glitch-text" data-text="DON'T TOUCH THE WALLS">DON'T TOUCH THE WALLS</h1>
             <p id="overlay-subtitle">MOVE YOUR MOUSE TO THE CENTER &amp; PRESS START</p>
           </div>
@@ -52,11 +50,7 @@
 
           <!-- Status / Instructions positioned BELOW the center button -->
           <div id="overlay-bottom" class="overlay-slot bottom">
-            <p id="overlay-note">STAY INSIDE THE CORRIDORS. REACH THE GREEN RITUAL EXIT. TURN UP AUDIO.</p>
-            <div id="overlay-actions" class="hidden">
-              <button id="btn-restart-campaign" type="button" class="pixel-btn small">RESTART FLOOR I</button>
-              <button id="btn-try-endless" type="button" class="pixel-btn small">ENDLESS NIGHTMARE</button>
-            </div>
+            <p id="overlay-note">HEADPHONES RECOMMENDED — PLAY WITH AUDIO ON FOR THE BEST EXPERIENCE.</p>
           </div>
         </div>
 
@@ -68,6 +62,18 @@
 
         <!-- Live Scare Caption -->
         <div id="scare-caption" class="hidden"></div>
+
+        <!-- Act Finale Opening Announcement (Chapters 3, 6, 9) -->
+        <div id="act-announcement" class="hidden" aria-live="assertive">
+          <p id="act-announcement-text"></p>
+        </div>
+
+        <!-- Special Victory Screen (After Clearing All 9 Chapters) -->
+        <div id="victory-screen" class="hidden" aria-live="polite">
+          <h1 class="victory-title">YOU ESCAPED.. FOR NOW.</h1>
+          <p class="victory-quote">"THE WALLS FALL SILENT BEHIND YOU."</p>
+          <button id="btn-play-again" type="button" class="pixel-btn victory-btn">PLAY AGAIN</button>
+        </div>
       </div>
     </main>
 
@@ -76,10 +82,6 @@
       <span>[MOUSE] GUIDE THE LANTERN</span>
       <span>•</span>
       <span>DON'T TOUCH WALLS OR LEAVE THE SCREEN</span>
-      <span>•</span>
-      <span id="hud-proximity">PULSE: CALM</span>
-      <span>•</span>
-      <span id="hud-best">BEST: --</span>
     </footer>
   </div>
 

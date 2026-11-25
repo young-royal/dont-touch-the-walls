@@ -41,60 +41,142 @@ html, body {
 
 /* ---------- HUD Bar ---------- */
 #hud {
+  position: relative;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 8px 16px;
+  justify-content: center;
+  padding: 10px 16px;
   background: var(--panel);
   border-bottom: 2px solid var(--border);
-  font-size: 13px;
-  letter-spacing: 1px;
+  font-size: 14px;
+  letter-spacing: 3px;
   text-transform: uppercase;
   flex-shrink: 0;
+  overflow: hidden;
   z-index: 20;
 }
 
-.hud-left, .hud-right {
+.hud-brand {
+  position: relative;
+  z-index: 2;
+  color: var(--blood-bright);
+  font-weight: 900;
+  text-shadow: 2px 2px 0 #000, 0 0 10px rgba(0, 0, 0, 0.9);
+}
+
+#timer-bar {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: #0a0509;
+}
+
+#timer-bar.hidden {
+  display: none;
+}
+
+#timer-bar-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #4b0812 0%, #9c1124 75%, #d61c32 100%);
+  border-right: 3px solid #ff7885;
+  box-shadow: 0 0 16px rgba(255, 43, 61, 0.55);
+}
+
+#timer-bar.pulsing #timer-bar-fill {
+  animation: timerPulse 0.36s infinite steps(4);
+}
+
+#timer-bar.pulsing {
+  animation: timerTrackPulse 0.36s infinite steps(4);
+}
+
+@keyframes timerPulse {
+  0%, 100% {
+    background: linear-gradient(90deg, #750a18 0%, #d4142c 70%, #ff3649 100%);
+    box-shadow: 0 0 24px rgba(255, 43, 61, 0.95);
+    border-right-color: #ffffff;
+  }
+  50% {
+    background: linear-gradient(90deg, #3c040c 0%, #7d0b1a 70%, #b31224 100%);
+    box-shadow: 0 0 8px rgba(255, 43, 61, 0.3);
+    border-right-color: #ff4557;
+  }
+}
+
+@keyframes timerTrackPulse {
+  0%, 100% {
+    background: #24050b;
+  }
+  50% {
+    background: #0a0408;
+  }
+}
+
+/* ---------- Secret Admin Bar ---------- */
+#admin-bar {
+  position: fixed;
+  top: 46px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 6px 14px;
+  background: rgba(20, 8, 15, 0.95);
+  border: 2px solid var(--blood);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.85);
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  flex-wrap: wrap;
+  z-index: 30;
+}
+
+#admin-bar.hidden {
+  display: none;
+}
+
+.admin-tag {
+  color: var(--exit);
+  font-weight: 900;
+  text-shadow: 1px 1px 0 #000;
+}
+
+#admin-levels {
   display: flex;
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
 }
 
-.hud-brand {
-  color: var(--blood-bright);
-  font-weight: 900;
-  text-shadow: 2px 2px 0 #000;
-}
-
-.hud-sep {
-  color: var(--border);
-}
-
-#hud-floor {
-  color: var(--bone);
-  font-weight: 700;
-}
-
-.hud-stat {
-  color: var(--muted);
-}
-
-.hud-stat strong {
-  color: var(--amber);
-}
-
-.hud-control {
+.admin-cat-group {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
+  padding: 2px 6px;
+  background: rgba(8, 4, 10, 0.7);
+  border: 1px solid var(--border);
 }
 
-#vol-slider {
-  width: 66px;
-  accent-color: var(--blood-bright);
-  cursor: pointer;
+.admin-cat-label {
+  color: var(--amber);
+  font-weight: 900;
+  font-size: 10px;
+  margin-right: 2px;
+}
+
+.admin-lvl-btn.active {
+  background: #5a0e18;
+  border-color: var(--exit);
+  color: #fff;
+}
+
+#btn-admin-invincible.active {
+  background: #0e3f4a;
+  border-color: #5cf2ff;
+  color: #dffcff;
 }
 
 /* ---------- Pixel Buttons ---------- */
@@ -263,7 +345,17 @@ html, body {
 }
 
 .overlay-slot.top {
-  top: 12%;
+  top: 10%;
+}
+
+#overlay-category {
+  font-size: clamp(10px, 1.25vw, 13px);
+  font-weight: 900;
+  letter-spacing: 3px;
+  color: var(--blood-bright);
+  text-shadow: 2px 2px 0 #000;
+  margin-bottom: 4px;
+  min-height: 16px;
 }
 
 /* Exact mathematical center of the canvas */
@@ -301,17 +393,6 @@ html, body {
   letter-spacing: 1.5px;
   color: #b7a7aa;
   text-shadow: 2px 2px 0 #000;
-  margin-bottom: 10px;
-}
-
-#overlay-actions {
-  display: flex;
-  justify-content: center;
-  gap: 10px;
-}
-
-#overlay-actions.hidden {
-  display: none;
 }
 
 /* ---------- Countdown HUD ---------- */
@@ -387,6 +468,110 @@ html, body {
   display: none;
 }
 
+/* ---------- Act Finale Opening Announcement ---------- */
+#act-announcement {
+  position: absolute;
+  inset: 0;
+  z-index: 14;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: radial-gradient(circle at center, #140408 0%, #020103 78%);
+  text-align: center;
+}
+
+#act-announcement.hidden {
+  display: none;
+}
+
+#act-announcement-text {
+  font-size: clamp(20px, 3.4vw, 38px);
+  font-weight: 900;
+  letter-spacing: 3px;
+  color: var(--bone);
+  text-shadow:
+    3px 3px 0 #000,
+    0 0 22px rgba(255, 43, 61, 0.7);
+  animation: announceFade 2.8s ease-in-out forwards;
+}
+
+@keyframes announceFade {
+  0%   { opacity: 0; transform: scale(0.96); }
+  18%  { opacity: 1; transform: scale(1); }
+  78%  { opacity: 1; transform: scale(1.02); }
+  100% { opacity: 0; transform: scale(1.04); }
+}
+
+/* ---------- Special Victory Screen ---------- */
+#victory-screen {
+  position: absolute;
+  inset: 0;
+  z-index: 15;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 20px;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(16, 34, 24, 0.55) 0%,
+    rgba(5, 4, 8, 0.88) 78%
+  );
+  text-align: center;
+  animation: victoryReveal 0.8s ease-out forwards;
+}
+
+#victory-screen.hidden {
+  display: none;
+}
+
+@keyframes victoryReveal {
+  0%   { opacity: 0; transform: scale(0.98); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+.victory-title {
+  font-size: clamp(22px, 4vw, 44px);
+  font-weight: 900;
+  letter-spacing: 5px;
+  color: #f3fff6;
+  text-shadow:
+    3px 3px 0 #000,
+    0 0 26px rgba(82, 227, 125, 0.65);
+}
+
+.victory-quote {
+  font-size: clamp(11px, 1.45vw, 15px);
+  font-style: italic;
+  letter-spacing: 2px;
+  color: #c8d8ce;
+  text-shadow: 2px 2px 0 #000;
+  margin-bottom: 10px;
+}
+
+.victory-btn {
+  min-width: 164px;
+  height: 42px;
+  font-size: 15px;
+  letter-spacing: 3px;
+  color: #f4fff7;
+  background: linear-gradient(180deg, #1b6b3a 0%, #0d3b20 100%);
+  border: 3px solid var(--exit);
+  box-shadow:
+    0 0 0 3px #000,
+    0 0 24px rgba(82, 227, 125, 0.5);
+}
+
+.victory-btn:hover {
+  background: linear-gradient(180deg, #279150 0%, #14542f 100%);
+  border-color: #9effbc;
+  box-shadow:
+    0 0 0 3px #000,
+    0 0 32px rgba(82, 227, 125, 0.85);
+}
+
 /* ---------- Footer ---------- */
 #footer-bar {
   display: flex;
@@ -401,16 +586,6 @@ html, body {
   color: var(--muted);
   flex-shrink: 0;
   flex-wrap: wrap;
-}
-
-#hud-proximity.danger {
-  color: var(--blood-bright);
-  font-weight: 900;
-}
-
-#hud-proximity.tense {
-  color: var(--amber);
-  font-weight: 700;
 }
 
 .hidden {

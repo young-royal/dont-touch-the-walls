@@ -4,8 +4,10 @@
 (function (global) {
   "use strict";
 
-  const { W, H, CX, CY, CAMPAIGN_LEVELS, buildLevelData, generateEndlessLevel } =
+  const { W, H, CX, CY, CATEGORIES, CAMPAIGN_LEVELS, getCategory, buildLevelData } =
     global.MazeLevels;
+
+  const CENTER_PROMPT = "MOVE YOUR MOUSE TO THE CENTER & PRESS START";
 
   // 4x4 Bayer ordered dithering matrix (normalized 0..1)
   const BAYER4 = [
@@ -21,29 +23,30 @@
   const crtFrame = document.getElementById("crt-frame");
 
   const overlay = document.getElementById("overlay");
+  const overlayCategory = document.getElementById("overlay-category");
   const overlayTitle = document.getElementById("overlay-title");
   const overlaySubtitle = document.getElementById("overlay-subtitle");
   const overlayNote = document.getElementById("overlay-note");
-  const overlayActions = document.getElementById("overlay-actions");
 
   const btnStart = document.getElementById("btn-start");
-  const btnMute = document.getElementById("btn-mute");
-  const volSlider = document.getElementById("vol-slider");
-  const btnStrobe = document.getElementById("btn-strobe");
-  const btnMode = document.getElementById("btn-mode");
-  const btnRestartCampaign = document.getElementById("btn-restart-campaign");
-  const btnTryEndless = document.getElementById("btn-try-endless");
 
   const countdownHud = document.getElementById("countdown-hud");
   const countdownNum = document.getElementById("countdown-num");
   const countdownMsg = document.getElementById("countdown-msg");
   const scareCaption = document.getElementById("scare-caption");
+  const actAnnouncement = document.getElementById("act-announcement");
+  const actAnnouncementText = document.getElementById("act-announcement-text");
 
-  const hudFloor = document.getElementById("hud-floor");
-  const hudDeaths = document.getElementById("hud-deaths");
-  const hudTime = document.getElementById("hud-time");
-  const hudProximity = document.getElementById("hud-proximity");
-  const hudBest = document.getElementById("hud-best");
+  const victoryScreen = document.getElementById("victory-screen");
+  const btnPlayAgain = document.getElementById("btn-play-again");
+
+  const timerBar = document.getElementById("timer-bar");
+  const timerBarFill = document.getElementById("timer-bar-fill");
+
+  const adminBar = document.getElementById("admin-bar");
+  const adminLevels = document.getElementById("admin-levels");
+  const btnAdminInvincible = document.getElementById("btn-admin-invincible");
+  const btnAdminClose = document.getElementById("btn-admin-close");
 
   // Subsystems
   const audio = new global.HorrorAudio();
@@ -60,10 +63,8 @@
 
   // Game State
   const state = {
-    mode: "campaign", // "campaign" | "endless"
     phase: "TITLE", // TITLE | READY | COUNTDOWN | PLAYING | JUMPSCARE | LEVEL_CLEAR | VICTORY
     levelIndex: 0,
-    endlessFloor: 1,
     levelData: null,
 
     deaths: 0,
@@ -75,6 +76,10 @@
     mouseY: CY,
     prevMouseX: CX,
     prevMouseY: CY,
+    lastTickX: CX,
+    lastTickY: CY,
+    mouseVx: 0,
+    mouseVy: 0,
     pointerInside: false,
 
     // Countdown timer
@@ -83,53 +88,74 @@
     outOfCenterWarned: false,
     goFlashTimer: 0,
 
-    // Level clear transition timer
+    // Level clear & act announcement timers
     clearTimer: 0,
+    announceTimer: 0,
 
-    // Particles (lantern sparks & trail)
+    // Particles & hunting mobs (Act III)
     particles: [],
+    mobs: [],
     time: 0,
     proximity: 0,
     lastScareName: "",
+
+    // Secret Admin Mode
+    adminEnabled: false,
+    adminInvincible: false,
+    keyBuffer: "",
   };
 
-  // Best record persistence
-  function loadBest() {
-    try {
-      const raw = localStorage.getItem("dttw_best_time");
-      if (raw) {
-        const val = parseFloat(raw);
-        if (!Number.isNaN(val)) {
-          hudBest.textContent = `BEST: ${val.toFixed(1)}s`;
-          return val;
-        }
-      }
-    } catch (_) {}
-    hudBest.textContent = "BEST: --";
-    return null;
-  }
-
-  function saveBest(seconds) {
-    try {
-      const prev = loadBest();
-      if (prev === null || seconds < prev) {
-        localStorage.setItem("dttw_best_time", seconds.toFixed(2));
-        hudBest.textContent = `BEST: ${seconds.toFixed(1)}s`;
-      }
-    } catch (_) {}
+  function spawnLevelMobs() {
+    const specs = (state.levelData && state.levelData.def.mobs) || [];
+    state.mobs = specs.map((m, i) => ({
+      type: m.type,
+      x: m.x,
+      y: m.y,
+      speed: m.speed,
+      dashSpeed: m.dashSpeed || 110,
+      phaseSpeed: m.phaseSpeed || 38,
+      radius: m.radius || 5,
+      phase: i * 1.7,
+      dashState: "stalk", // "stalk" | "windup" | "dash"
+      dashTimer: 1.4 + (i % 3) * 0.75,
+      dashDirX: 0,
+      dashDirY: 0,
+      // Spirit teleport state ("visible" | "fadeout" | "fadein" | "enraged" | "return_fade")
+      spiritState: "visible",
+      spiritTimer: 9.0,
+      spiritAlpha: 1,
+      returnX: m.x,
+      returnY: m.y,
+      husk: null,
+      trail: [],
+    }));
   }
 
   // Load current level
   function loadCurrentLevel() {
-    if (state.mode === "campaign") {
-      const def = CAMPAIGN_LEVELS[state.levelIndex];
-      state.levelData = buildLevelData(def);
-    } else {
-      state.levelData = generateEndlessLevel(state.endlessFloor);
-    }
-    hudFloor.textContent = state.levelData.def.name;
+    const def = CAMPAIGN_LEVELS[state.levelIndex];
+    state.levelData = buildLevelData(def);
     state.particles = [];
     state.proximity = 0;
+    spawnLevelMobs();
+    syncAdminButtons();
+  }
+
+  function resetTimerBar() {
+    timerBar.classList.add("hidden");
+    timerBar.classList.remove("pulsing");
+    timerBarFill.style.width = "0%";
+  }
+
+  function updateTimerBar(progress) {
+    const clamped = Math.max(0, Math.min(1, progress));
+    timerBar.classList.remove("hidden");
+    timerBarFill.style.width = `${(clamped * 100).toFixed(2)}%`;
+    if (clamped >= 0.72) {
+      timerBar.classList.add("pulsing");
+    } else {
+      timerBar.classList.remove("pulsing");
+    }
   }
 
   // Convert DOM pointer event to logical 320x200 coordinates
@@ -140,12 +166,12 @@
     return [x, y];
   }
 
-  // Check if cursor core (3x3 cross) touches wall or exit
+  // Check if cursor core (3x3 cross) touches wall, fake exit hole, or exit
   function sampleCollision(x, y) {
     const ix = Math.round(x);
     const iy = Math.round(y);
     if (ix <= 1 || ix >= W - 2 || iy <= 1 || iy >= H - 2) {
-      return { hitWall: true, hitExit: false };
+      return { hitWall: true, hitExit: false, hitFakeExit: false };
     }
     const mask = state.levelData.mask;
     const offsets = [
@@ -156,20 +182,23 @@
       [0, 1],
     ];
     let hitExit = false;
+    let hitFakeExit = false;
     for (let i = 0; i < offsets.length; i++) {
       const m = mask[(iy + offsets[i][1]) * W + (ix + offsets[i][0])];
       if (m === 0) {
-        return { hitWall: true, hitExit: false };
+        return { hitWall: true, hitExit: false, hitFakeExit: false };
       }
       if (m === 2) {
         hitExit = true;
+      } else if (m === 3) {
+        hitFakeExit = true;
       }
     }
-    return { hitWall: false, hitExit };
+    return { hitWall: false, hitExit, hitFakeExit };
   }
 
   // Raycast movement segment at 0.5px steps so fast mouse swings can never tunnel through walls
-  function checkMovementSegment(x0, y0, x1, y1) {
+  function checkMovementSegment(x0, y0, x1, y1, ignoreWalls) {
     const dx = x1 - x0;
     const dy = y1 - y0;
     const dist = Math.hypot(dx, dy);
@@ -179,14 +208,17 @@
       const sx = x0 + dx * t;
       const sy = y0 + dy * t;
       const res = sampleCollision(sx, sy);
-      if (res.hitWall) {
-        return { hitWall: true, hitExit: false, x: sx, y: sy };
-      }
       if (res.hitExit) {
-        return { hitWall: false, hitExit: true, x: sx, y: sy };
+        return { hitWall: false, hitExit: true, hitFakeExit: false, x: sx, y: sy };
+      }
+      if (!ignoreWalls && res.hitFakeExit) {
+        return { hitWall: false, hitExit: false, hitFakeExit: true, x: sx, y: sy };
+      }
+      if (!ignoreWalls && res.hitWall) {
+        return { hitWall: true, hitExit: false, hitFakeExit: false, x: sx, y: sy };
       }
     }
-    return { hitWall: false, hitExit: false, x: x1, y: y1 };
+    return { hitWall: false, hitExit: false, hitFakeExit: false, x: x1, y: y1 };
   }
 
   function isInsideCenterSanctuary(x, y) {
@@ -204,21 +236,82 @@
 
   // Show centered overlay (START / RETRY / NEXT FLOOR / VICTORY)
   function showReadyOverlay(opts) {
+    const catName =
+      opts.category !== undefined
+        ? opts.category
+        : getCategory(state.levelData.def.category).name;
+    overlayCategory.textContent = catName;
     overlayTitle.textContent = opts.title;
     overlaySubtitle.textContent = opts.subtitle;
     overlayNote.textContent = opts.note || "";
     btnStart.textContent = opts.buttonText || "START";
 
-    if (opts.showExtraActions) {
-      overlayActions.classList.remove("hidden");
-    } else {
-      overlayActions.classList.add("hidden");
-    }
-
     overlay.classList.remove("hidden");
     countdownHud.classList.add("hidden");
     scareCaption.classList.add("hidden");
+    actAnnouncement.classList.add("hidden");
+    victoryScreen.classList.add("hidden");
     setCursorHidden(false);
+  }
+
+  function showVictoryScreen() {
+    state.phase = "VICTORY";
+    overlay.classList.add("hidden");
+    countdownHud.classList.add("hidden");
+    scareCaption.classList.add("hidden");
+    actAnnouncement.classList.add("hidden");
+    crtFrame.classList.remove("shaking");
+    resetTimerBar();
+    setCursorHidden(false);
+    audio.updateTension(0.016, 0, false);
+    audio.playVictory();
+    victoryScreen.classList.remove("hidden");
+
+    // Seed celebratory rising dawn embers
+    state.particles = [];
+    for (let i = 0; i < 36; i++) {
+      state.particles.push({
+        x: 60 + Math.random() * 200,
+        y: Math.random() * H,
+        vx: (Math.random() - 0.5) * 6,
+        vy: -8 - Math.random() * 14,
+        life: 1 + Math.random() * 2,
+        maxLife: 3,
+        color: Math.random() < 0.55 ? "#7bffa6" : "#ffe6a3",
+      });
+    }
+  }
+
+  function presentCurrentChapter(allowAnnouncement) {
+    const def = state.levelData.def;
+    if (allowAnnouncement && def.announcement) {
+      state.phase = "ANNOUNCEMENT";
+      state.announceTimer = 2.8;
+      overlay.classList.add("hidden");
+      countdownHud.classList.add("hidden");
+      scareCaption.classList.add("hidden");
+      victoryScreen.classList.add("hidden");
+      setCursorHidden(false);
+
+      // Restart CSS fade animation cleanly
+      actAnnouncementText.style.animation = "none";
+      void actAnnouncementText.offsetWidth;
+      actAnnouncementText.style.animation = "";
+      actAnnouncementText.textContent = def.announcement;
+      actAnnouncement.classList.remove("hidden");
+
+      audio.playAnnouncement();
+      return;
+    }
+
+    actAnnouncement.classList.add("hidden");
+    state.phase = "READY";
+    showReadyOverlay({
+      title: def.name,
+      subtitle: CENTER_PROMPT,
+      note: def.subtitle,
+      buttonText: "START",
+    });
   }
 
   // Start Countdown (triggered by clicking exact-center START button)
@@ -240,7 +333,6 @@
       state.levelIndex = 0;
       state.totalCampaignTime = 0;
       state.deaths = 0;
-      hudDeaths.textContent = "0";
       loadCurrentLevel();
     }
 
@@ -249,7 +341,12 @@
     state.lastCountdownInt = 4;
     state.outOfCenterWarned = false;
     state.runTime = 0;
-    hudTime.textContent = "00.0s";
+    state.lastTickX = state.mouseX;
+    state.lastTickY = state.mouseY;
+    state.mouseVx = 0;
+    state.mouseVy = 0;
+    spawnLevelMobs();
+    resetTimerBar();
 
     overlay.classList.add("hidden");
     countdownHud.classList.remove("hidden");
@@ -264,8 +361,8 @@
 
     state.phase = "JUMPSCARE";
     state.deaths++;
-    hudDeaths.textContent = String(state.deaths);
     state.proximity = 0;
+    resetTimerBar();
     audio.updateTension(0.016, 0, false);
 
     const scare = jumpscare.trigger(reasonCaption);
@@ -286,10 +383,9 @@
 
     showReadyOverlay({
       title: `CAUGHT BY ${state.lastScareName}`,
-      subtitle: "PUT YOUR MOUSE IN THE CENTER & PRESS START",
+      subtitle: CENTER_PROMPT,
       note: `${state.levelData.def.name}  •  DEATHS: ${state.deaths}`,
       buttonText: "RETRY",
-      showExtraActions: false,
     });
   }
 
@@ -297,6 +393,7 @@
     state.phase = "LEVEL_CLEAR";
     state.clearTimer = 1.15;
     state.totalCampaignTime += state.runTime;
+    resetTimerBar();
     audio.updateTension(0.016, 0, false);
     audio.playLevelClear();
     setCursorHidden(false);
@@ -310,41 +407,13 @@
   function advanceAfterClear() {
     countdownHud.classList.add("hidden");
 
-    if (state.mode === "campaign") {
-      if (state.levelIndex + 1 < CAMPAIGN_LEVELS.length) {
-        state.levelIndex++;
-        loadCurrentLevel();
-        state.phase = "READY";
-        showReadyOverlay({
-          title: state.levelData.def.name,
-          subtitle: "MOVE MOUSE TO CENTER & PRESS START",
-          note: state.levelData.def.subtitle,
-          buttonText: "START",
-          showExtraActions: false,
-        });
-      } else {
-        // Campaign Beaten!
-        saveBest(state.totalCampaignTime);
-        state.phase = "VICTORY";
-        showReadyOverlay({
-          title: "YOU ESCAPED THE ABYSS",
-          subtitle: `ALL 5 FLOORS CLEARED IN ${state.totalCampaignTime.toFixed(1)}s (${state.deaths} DEATHS)`,
-          note: "DARE TO ENTER ENDLESS NIGHTMARE OR RUN THE CAMPAIGN AGAIN?",
-          buttonText: "PLAY AGAIN",
-          showExtraActions: true,
-        });
-      }
-    } else {
-      state.endlessFloor++;
+    if (state.levelIndex + 1 < CAMPAIGN_LEVELS.length) {
+      state.levelIndex++;
       loadCurrentLevel();
-      state.phase = "READY";
-      showReadyOverlay({
-        title: state.levelData.def.name,
-        subtitle: "MOVE MOUSE TO CENTER & PRESS START",
-        note: `ENDLESS STREAK: ${state.endlessFloor - 1} CLEARED  •  CORRIDORS TIGHTEN`,
-        buttonText: "START",
-        showExtraActions: false,
-      });
+      presentCurrentChapter(true);
+    } else {
+      // All 9 chapters cleared — launch special Victory Screen!
+      showVictoryScreen();
     }
   }
 
@@ -368,7 +437,14 @@
     state.pointerInside = lx >= 0 && lx <= W && ly >= 0 && ly <= H;
 
     if (state.phase === "PLAYING") {
-      const res = checkMovementSegment(state.mouseX, state.mouseY, lx, ly);
+      const invincible = state.adminInvincible;
+      const res = checkMovementSegment(
+        state.mouseX,
+        state.mouseY,
+        lx,
+        ly,
+        invincible
+      );
       state.prevMouseX = state.mouseX;
       state.prevMouseY = state.mouseY;
       state.mouseX = res.x;
@@ -379,9 +455,40 @@
         spawnEmber(state.mouseX, state.mouseY, moved);
       }
 
-      if (res.hitWall) {
+      if (res.hitWall && !invincible) {
         triggerJumpscare();
         return;
+      }
+      if (res.hitFakeExit && !invincible) {
+        triggerJumpscare("FALSE EXIT");
+        return;
+      }
+      if (!invincible && state.mobs.length > 0) {
+        // Prevent tunneling through a hunting mob with a fast mouse swipe
+        const segDx = state.mouseX - state.prevMouseX;
+        const segDy = state.mouseY - state.prevMouseY;
+        const segLen2 = segDx * segDx + segDy * segDy;
+        for (let i = 0; i < state.mobs.length; i++) {
+          const mob = state.mobs[i];
+          const t =
+            segLen2 > 0
+              ? Math.max(
+                  0,
+                  Math.min(
+                    1,
+                    ((mob.x - state.prevMouseX) * segDx +
+                      (mob.y - state.prevMouseY) * segDy) /
+                      segLen2
+                  )
+                )
+              : 0;
+          const cx = state.prevMouseX + segDx * t;
+          const cy = state.prevMouseY + segDy * t;
+          if (Math.hypot(mob.x - cx, mob.y - cy) <= mob.radius + 1.5) {
+            triggerJumpscare("HUNTED DOWN");
+            return;
+          }
+        }
       }
       if (res.hitExit) {
         triggerLevelClear();
@@ -397,7 +504,7 @@
 
   function handlePointerLeave() {
     state.pointerInside = false;
-    if (state.phase === "PLAYING") {
+    if (state.phase === "PLAYING" && !state.adminInvincible) {
       // Classic maze horror anti-escape rule!
       triggerJumpscare("YOU CANNOT FLEE");
     }
@@ -406,7 +513,7 @@
   canvas.addEventListener("pointermove", handlePointerMove);
   canvas.addEventListener("pointerleave", handlePointerLeave);
   crtFrame.addEventListener("mouseleave", () => {
-    if (state.phase === "PLAYING") {
+    if (state.phase === "PLAYING" && !state.adminInvincible) {
       triggerJumpscare("YOU CANNOT FLEE");
     }
   });
@@ -416,58 +523,368 @@
     beginCountdown(e);
   });
 
-  btnMute.addEventListener("click", () => {
-    audio.init();
-    const nextMuted = !audio.muted;
-    audio.setMuted(nextMuted);
-    btnMute.textContent = nextMuted ? "SFX: OFF" : "SFX: ON";
-  });
-
-  volSlider.addEventListener("input", (e) => {
-    audio.init();
-    const val = parseFloat(e.target.value);
-    audio.setVolume(val);
-    if (val > 0 && audio.muted) {
-      audio.setMuted(false);
-      btnMute.textContent = "SFX: ON";
-    }
-  });
-
-  btnStrobe.addEventListener("click", () => {
+  btnPlayAgain.addEventListener("click", () => {
     audio.playClick();
-    jumpscare.allowStrobe = !jumpscare.allowStrobe;
-    btnStrobe.textContent = jumpscare.allowStrobe ? "FLASH: ON" : "FLASH: LOW";
-  });
-
-  function switchMode(targetMode) {
-    audio.playClick();
-    state.mode = targetMode;
-    btnMode.textContent =
-      state.mode === "campaign" ? "MODE: CAMPAIGN" : "MODE: ENDLESS";
+    victoryScreen.classList.add("hidden");
     state.levelIndex = 0;
-    state.endlessFloor = 1;
-    state.deaths = 0;
     state.totalCampaignTime = 0;
-    hudDeaths.textContent = "0";
-    hudTime.textContent = "00.0s";
-    crtFrame.classList.remove("shaking");
+    state.deaths = 0;
+    state.runTime = 0;
+    resetTimerBar();
     loadCurrentLevel();
     state.phase = "READY";
     showReadyOverlay({
-      title: state.levelData.def.name,
-      subtitle: "MOVE MOUSE TO CENTER & PRESS START",
-      note: state.levelData.def.subtitle,
+      title: "DON'T TOUCH THE WALLS",
+      subtitle: CENTER_PROMPT,
+      note: "HEADPHONES RECOMMENDED — PLAY WITH AUDIO ON FOR THE BEST EXPERIENCE.",
       buttonText: "START",
-      showExtraActions: false,
+    });
+  });
+
+  // ---------------- Secret Admin Mode ("g a y") ----------------
+  const ADMIN_CODE = "gay";
+
+  function syncAdminButtons() {
+    const btns = adminLevels.querySelectorAll(".admin-lvl-btn");
+    btns.forEach((b) => {
+      const idx = parseInt(b.dataset.index, 10);
+      if (idx === state.levelIndex) {
+        b.classList.add("active");
+      } else {
+        b.classList.remove("active");
+      }
     });
   }
 
-  btnMode.addEventListener("click", () => {
-    switchMode(state.mode === "campaign" ? "endless" : "campaign");
+  function syncInvincibleButton() {
+    if (state.adminInvincible) {
+      btnAdminInvincible.textContent = "INVINCIBLE (I): ON";
+      btnAdminInvincible.classList.add("active");
+    } else {
+      btnAdminInvincible.textContent = "INVINCIBLE (I): OFF";
+      btnAdminInvincible.classList.remove("active");
+    }
+  }
+
+  function toggleAdminInvincible() {
+    audio.playClick();
+    state.adminInvincible = !state.adminInvincible;
+    syncInvincibleButton();
+
+    if (!state.adminInvincible && state.phase === "PLAYING") {
+      const c = sampleCollision(state.mouseX, state.mouseY);
+      if (!state.pointerInside) {
+        triggerJumpscare("YOU CANNOT FLEE");
+      } else if (c.hitWall) {
+        triggerJumpscare();
+      } else if (c.hitFakeExit) {
+        triggerJumpscare("FALSE EXIT");
+      }
+    }
+  }
+
+  function jumpToLevel(idx) {
+    if (idx < 0 || idx >= CAMPAIGN_LEVELS.length) return;
+    audio.playClick();
+    crtFrame.classList.remove("shaking");
+    scareCaption.classList.add("hidden");
+    countdownHud.classList.add("hidden");
+    audio.updateTension(0.016, 0, false);
+
+    state.levelIndex = idx;
+    state.runTime = 0;
+    resetTimerBar();
+    loadCurrentLevel();
+    presentCurrentChapter(true);
+  }
+
+  function setAdminMode(enabled) {
+    state.adminEnabled = !!enabled;
+    if (state.adminEnabled) {
+      adminBar.classList.remove("hidden");
+      syncAdminButtons();
+      syncInvincibleButton();
+      audio.playClick();
+    } else {
+      adminBar.classList.add("hidden");
+    }
+  }
+
+  // Build admin level selector buttons grouped by the 3 Categories
+  CATEGORIES.forEach((cat) => {
+    const group = document.createElement("div");
+    group.className = "admin-cat-group";
+
+    const label = document.createElement("span");
+    label.className = "admin-cat-label";
+    label.textContent = `${cat.short}:`;
+    label.title = cat.name;
+    group.appendChild(label);
+
+    CAMPAIGN_LEVELS.forEach((lvl, idx) => {
+      if (lvl.category !== cat.id) return;
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "pixel-btn small admin-lvl-btn";
+      btn.dataset.index = String(idx);
+      btn.textContent = String(idx + 1);
+      btn.title = `${cat.name} — ${lvl.name}`;
+      btn.addEventListener("click", () => jumpToLevel(idx));
+      group.appendChild(btn);
+    });
+
+    adminLevels.appendChild(group);
   });
 
-  btnRestartCampaign.addEventListener("click", () => switchMode("campaign"));
-  btnTryEndless.addEventListener("click", () => switchMode("endless"));
+  btnAdminInvincible.addEventListener("click", toggleAdminInvincible);
+  btnAdminClose.addEventListener("click", () => setAdminMode(false));
+
+  window.addEventListener("keydown", (e) => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const key = e.key.toLowerCase();
+
+    // Quick shortcuts when Admin Mode is active
+    if (state.adminEnabled) {
+      if (key >= "1" && key <= String(CAMPAIGN_LEVELS.length)) {
+        jumpToLevel(parseInt(key, 10) - 1);
+        return;
+      }
+      if (key === "i") {
+        toggleAdminInvincible();
+        return;
+      }
+    }
+
+    if (key.length === 1 && key >= "a" && key <= "z") {
+      state.keyBuffer = (state.keyBuffer + key).slice(-ADMIN_CODE.length);
+      if (state.keyBuffer === ADMIN_CODE) {
+        state.keyBuffer = "";
+        setAdminMode(!state.adminEnabled);
+      }
+    }
+  });
+
+  // Update hunting mobs (Act III — Chapters 7, 8, 9)
+  function updateMobs(dt) {
+    if (state.mobs.length === 0) return { hitPlayer: false, nearestDist: 999 };
+
+    // Track smoothed player velocity for interceptor mobs
+    const rawVx = (state.mouseX - state.lastTickX) / Math.max(dt, 0.008);
+    const rawVy = (state.mouseY - state.lastTickY) / Math.max(dt, 0.008);
+    state.lastTickX = state.mouseX;
+    state.lastTickY = state.mouseY;
+    state.mouseVx = state.mouseVx * 0.8 + Math.max(-180, Math.min(180, rawVx)) * 0.2;
+    state.mouseVy = state.mouseVy * 0.8 + Math.max(-180, Math.min(180, rawVy)) * 0.2;
+
+    let nearestDist = 999;
+
+    for (let i = 0; i < state.mobs.length; i++) {
+      const mob = state.mobs[i];
+
+      // Save smoky afterimage trail (only while moving)
+      const isStandingSpirit =
+        mob.type === "spirit" &&
+        mob.spiritState !== "visible" &&
+        mob.spiritState !== "enraged";
+      if (!isStandingSpirit && Math.random() < 0.45) {
+        mob.trail.push({
+          x: mob.x,
+          y: mob.y,
+          life: 0.28,
+          enraged: mob.type === "spirit" && mob.spiritState === "enraged",
+        });
+        if (mob.trail.length > 8) mob.trail.shift();
+      }
+      for (let t = mob.trail.length - 1; t >= 0; t--) {
+        mob.trail[t].life -= dt;
+        if (mob.trail[t].life <= 0) mob.trail.splice(t, 1);
+      }
+
+      // Decay Spirit's left-behind static husk
+      if (mob.husk) {
+        mob.husk.life -= dt;
+        if (mob.husk.life <= 0) mob.husk = null;
+      }
+
+      let vx = 0;
+      let vy = 0;
+
+      if (mob.type === "dasher") {
+        mob.dashTimer -= dt;
+        if (mob.dashState === "stalk") {
+          const dx = state.mouseX - mob.x;
+          const dy = state.mouseY - mob.y;
+          const d = Math.hypot(dx, dy) || 1;
+          vx = (dx / d) * mob.speed;
+          vy = (dy / d) * mob.speed;
+
+          if (mob.dashTimer <= 0 && d < 165) {
+            mob.dashState = "windup";
+            mob.dashTimer = 0.48;
+            mob.dashDirX = dx / d;
+            mob.dashDirY = dy / d;
+            audio.playDashCue();
+          }
+        } else if (mob.dashState === "windup") {
+          // Lock onto player during early windup, freeze just before lunge
+          if (mob.dashTimer > 0.16) {
+            const dx = state.mouseX - mob.x;
+            const dy = state.mouseY - mob.y;
+            const d = Math.hypot(dx, dy) || 1;
+            mob.dashDirX = dx / d;
+            mob.dashDirY = dy / d;
+          }
+          if (mob.dashTimer <= 0) {
+            mob.dashState = "dash";
+            mob.dashTimer = 0.44;
+          }
+        } else if (mob.dashState === "dash") {
+          vx = mob.dashDirX * mob.dashSpeed;
+          vy = mob.dashDirY * mob.dashSpeed;
+          if (mob.dashTimer <= 0) {
+            mob.dashState = "stalk";
+            mob.dashTimer = 1.85 + Math.random() * 0.9;
+          }
+        }
+      } else if (mob.type === "intercept") {
+        // Predict ahead of player's movement to cut off escape routes
+        const leadX = Math.max(12, Math.min(W - 12, state.mouseX + state.mouseVx * 0.42));
+        const leadY = Math.max(12, Math.min(H - 12, state.mouseY + state.mouseVy * 0.42));
+        const dx = leadX - mob.x;
+        const dy = leadY - mob.y;
+        const d = Math.hypot(dx, dy) || 1;
+        vx = (dx / d) * mob.speed;
+        vy = (dy / d) * mob.speed;
+      } else if (mob.type === "spirit") {
+        // Chapter 9 — Purple Stalker:
+        // Follows like lvl 7 -> after 9s (then every 6s), blinks out, teleports nearer &
+        // speeds up for 3s -> if it doesn't catch you, returns back & slows down
+        mob.spiritTimer -= dt;
+        if (mob.spiritState === "visible") {
+          mob.spiritAlpha = 1;
+          const dx = state.mouseX - mob.x;
+          const dy = state.mouseY - mob.y;
+          const d = Math.hypot(dx, dy) || 1;
+          const sway = Math.sin(state.time * 4.8 + mob.phase) * 0.22;
+          vx = ((dx / d) - (dy / d) * sway) * mob.speed;
+          vy = ((dy / d) + (dx / d) * sway) * mob.speed;
+
+          if (mob.spiritTimer <= 0) {
+            mob.returnX = mob.x;
+            mob.returnY = mob.y;
+            mob.spiritState = "fadeout";
+            mob.spiritTimer = 0.6;
+            mob.husk = { x: mob.x, y: mob.y, life: 4.5, maxLife: 4.5 };
+            audio.playPhaseCue(false);
+          }
+        } else if (mob.spiritState === "fadeout") {
+          // Stands in place blinking/fading out before teleporting nearer
+          vx = 0;
+          vy = 0;
+          mob.spiritAlpha = Math.max(0, mob.spiritTimer / 0.6);
+
+          if (mob.spiritTimer <= 0) {
+            let tx = mob.x;
+            let ty = mob.y;
+            for (let attempt = 0; attempt < 24; attempt++) {
+              const ang = Math.random() * Math.PI * 2;
+              const dist = 58 + Math.random() * 24;
+              const cx = Math.max(16, Math.min(W - 16, state.mouseX + Math.cos(ang) * dist));
+              const cy = Math.max(16, Math.min(H - 16, state.mouseY + Math.sin(ang) * dist));
+              if (Math.hypot(cx - state.mouseX, cy - state.mouseY) >= 52) {
+                tx = cx;
+                ty = cy;
+                break;
+              }
+            }
+            mob.x = tx;
+            mob.y = ty;
+            mob.trail = [];
+            mob.spiritState = "fadein";
+            mob.spiritTimer = 0.35;
+            mob.spiritAlpha = 0;
+            audio.playPhaseCue(true);
+          }
+        } else if (mob.spiritState === "fadein") {
+          // Blinks/fades in at the closer spot before speeding up
+          vx = 0;
+          vy = 0;
+          mob.spiritAlpha = Math.min(1, 1 - mob.spiritTimer / 0.35);
+
+          if (mob.spiritTimer <= 0) {
+            mob.spiritState = "enraged";
+            mob.spiritTimer = 3.0;
+            mob.spiritAlpha = 1;
+          }
+        } else if (mob.spiritState === "enraged") {
+          // Speeds up and chases aggressively for 3 seconds
+          mob.spiritAlpha = 1;
+          const dx = state.mouseX - mob.x;
+          const dy = state.mouseY - mob.y;
+          const d = Math.hypot(dx, dy) || 1;
+          const sway = Math.sin(state.time * 7.5 + mob.phase) * 0.14;
+          vx = ((dx / d) - (dy / d) * sway) * mob.phaseSpeed;
+          vy = ((dy / d) + (dx / d) * sway) * mob.phaseSpeed;
+
+          if (mob.spiritTimer <= 0) {
+            mob.spiritState = "return_fade";
+            mob.spiritTimer = 0.45;
+            audio.playPhaseCue(false);
+          }
+        } else if (mob.spiritState === "return_fade") {
+          // Failed to catch within 3s -> blinks out and snaps back to previous position
+          vx = 0;
+          vy = 0;
+          mob.spiritAlpha = Math.max(0, mob.spiritTimer / 0.45);
+
+          if (mob.spiritTimer <= 0) {
+            mob.x = mob.returnX;
+            mob.y = mob.returnY;
+            mob.trail = [];
+            mob.husk = null;
+            mob.spiritState = "visible";
+            mob.spiritTimer = 6.0;
+            mob.spiritAlpha = 1;
+            audio.playPhaseCue(true);
+          }
+        }
+      } else {
+        // Relentless Stalker Wraith with eerie lateral sway
+        const dx = state.mouseX - mob.x;
+        const dy = state.mouseY - mob.y;
+        const d = Math.hypot(dx, dy) || 1;
+        const sway = Math.sin(state.time * 4.5 + mob.phase) * 0.25;
+        vx = ((dx / d) - (dy / d) * sway) * mob.speed;
+        vy = ((dy / d) + (dx / d) * sway) * mob.speed;
+      }
+
+      // Soft separation between mobs so they flank instead of stacking
+      for (let j = 0; j < state.mobs.length; j++) {
+        if (i === j) continue;
+        const other = state.mobs[j];
+        const sdx = mob.x - other.x;
+        const sdy = mob.y - other.y;
+        const sd = Math.hypot(sdx, sdy);
+        if (sd > 0.1 && sd < 18) {
+          const push = ((18 - sd) / 18) * 28;
+          vx += (sdx / sd) * push;
+          vy += (sdy / sd) * push;
+        }
+      }
+
+      mob.x = Math.max(8, Math.min(W - 8, mob.x + vx * dt));
+      mob.y = Math.max(8, Math.min(H - 8, mob.y + vy * dt));
+
+      const distToPlayer = Math.hypot(state.mouseX - mob.x, state.mouseY - mob.y);
+      if (distToPlayer < nearestDist) nearestDist = distToPlayer;
+
+      if (!state.adminInvincible && distToPlayer <= mob.radius + 1.5) {
+        return { hitPlayer: true, nearestDist: 0 };
+      }
+    }
+
+    return { hitPlayer: false, nearestDist };
+  }
 
   // ---------------- Update Loop ----------------
   function update(dt) {
@@ -529,6 +946,7 @@
         state.goFlashTimer = 0.65;
         state.prevMouseX = state.mouseX;
         state.prevMouseY = state.mouseY;
+        updateTimerBar(0);
 
         countdownNum.className = "go";
         countdownNum.textContent = "RUN";
@@ -537,7 +955,14 @@
       audio.updateTension(dt, 0.25, false);
     } else if (state.phase === "PLAYING") {
       state.runTime += dt;
-      hudTime.textContent = `${state.runTime.toFixed(1)}s`;
+      const timeLimit = state.levelData.def.timeLimit;
+      const timeProgress = state.runTime / timeLimit;
+      updateTimerBar(timeProgress);
+
+      if (state.runTime >= timeLimit && !state.adminInvincible) {
+        triggerJumpscare("TIME'S UP");
+        return;
+      }
 
       if (state.goFlashTimer > 0) {
         state.goFlashTimer -= dt;
@@ -546,26 +971,29 @@
         }
       }
 
-      // Compute proximity dread from precomputed BFS wall distance field
+      // Update hunting mobs (Chapters 7, 8, 9)
+      const mobRes = updateMobs(dt);
+      if (mobRes.hitPlayer) {
+        triggerJumpscare("HUNTED DOWN");
+        return;
+      }
+
+      // Compute proximity dread from precomputed BFS wall distance field + nearest mob
       const ix = Math.max(0, Math.min(W - 1, Math.round(state.mouseX)));
       const iy = Math.max(0, Math.min(H - 1, Math.round(state.mouseY)));
       const wd = state.levelData.wallDist[iy * W + ix];
       const maxSafe = Math.max(4, state.levelData.def.corridorWidth * 0.55);
-      const prox = Math.max(0, Math.min(1, 1 - (wd - 1) / maxSafe));
+      const wallProx = Math.max(0, Math.min(1, 1 - (wd - 1) / maxSafe));
+      const mobProx =
+        state.mobs.length > 0
+          ? Math.max(0, Math.min(1, 1 - (mobRes.nearestDist - 8) / 56))
+          : 0;
+      const prox = Math.max(wallProx, mobProx);
       state.proximity = prox;
 
-      audio.updateTension(dt, prox, true);
-
-      if (prox > 0.72) {
-        hudProximity.textContent = "PULSE: PANIC!!";
-        hudProximity.className = "danger";
-      } else if (prox > 0.42) {
-        hudProximity.textContent = "PULSE: RACING";
-        hudProximity.className = "tense";
-      } else {
-        hudProximity.textContent = "PULSE: STEADY";
-        hudProximity.className = "";
-      }
+      // Blend timer urgency near expiry into heartbeat & tension audio
+      const timeUrgency = timeProgress > 0.72 ? (timeProgress - 0.72) / 0.28 : 0;
+      audio.updateTension(dt, Math.max(prox, timeUrgency * 0.9), true);
 
       // Periodic lantern embers
       if (Math.random() < 0.22) {
@@ -581,10 +1009,28 @@
       if (state.clearTimer <= 0) {
         advanceAfterClear();
       }
+    } else if (state.phase === "ANNOUNCEMENT") {
+      state.announceTimer -= dt;
+      audio.updateTension(dt, 0, false);
+      if (state.announceTimer <= 0) {
+        presentCurrentChapter(false);
+      }
+    } else if (state.phase === "VICTORY") {
+      audio.updateTension(dt, 0, false);
+      // Keep gentle golden/emerald embers drifting upward in the open dawn archway
+      if (state.particles.length < 40 && Math.random() < 0.45) {
+        state.particles.push({
+          x: 75 + Math.random() * 170,
+          y: H + 2,
+          vx: (Math.random() - 0.5) * 6,
+          vy: -10 - Math.random() * 14,
+          life: 2.2 + Math.random() * 1.4,
+          maxLife: 3.6,
+          color: Math.random() < 0.55 ? "#7bffa6" : "#ffe6a3",
+        });
+      }
     } else {
       audio.updateTension(dt, 0, false);
-      hudProximity.textContent = "PULSE: CALM";
-      hudProximity.className = "";
     }
   }
 
@@ -620,10 +1066,24 @@
     }
   }
 
-  function drawExitPortal() {
-    const [ex, ey] = state.levelData.def.exitPos;
-    const r = state.levelData.def.exitRadius;
+  function drawExitPortal(focusX, focusY) {
+    if (state.phase !== "PLAYING") return;
+
+    const def = state.levelData.def;
+    const [ex, ey] = def.exitPos;
+    const r = def.exitRadius;
+
+    // On Chapter 6, real exit stays blank/empty until you get close, then lights up green!
+    let alpha = 1;
+    if (def.revealExitDist) {
+      const distToExit = Math.hypot(focusX - ex, focusY - ey);
+      if (distToExit > def.revealExitDist) return;
+      alpha = Math.min(1, (def.revealExitDist - distToExit) / 14);
+    }
+
     const pulse = Math.sin(state.time * 5.2);
+    ctx.save();
+    ctx.globalAlpha = alpha;
 
     // Outer pulsing ritual glow
     ctx.fillStyle = "rgba(50, 225, 110, 0.22)";
@@ -649,6 +1109,7 @@
     ctx.font = "bold 6px monospace";
     ctx.textAlign = "center";
     ctx.fillText("EXIT", lx, ly + 1);
+    ctx.restore();
   }
 
   function drawCenterSanctuaryRing() {
@@ -708,6 +1169,15 @@
     const halfRad = radius * 0.5;
     const invRad = 1 / Math.max(8, halfRad);
 
+    const exitRevealFactor =
+      state.phase !== "PLAYING"
+        ? 0
+        : def.revealExitDist
+        ? Math.max(0, Math.min(1, (def.revealExitDist - Math.hypot(lx - ex, ly - ey)) / 14))
+        : def.hideExitGlow
+        ? 0
+        : 1;
+
     for (let y = 0; y < LIGHT_H; y++) {
       const bRow = BAYER4[y & 3];
       const dy = y - halfLy;
@@ -718,9 +1188,12 @@
         let light = Math.max(0, 1 - dist * invRad);
         light = light * light; // smooth quadratic falloff
 
-        // Faint eerie glow around the Exit Portal so player can navigate toward it
-        const edist = Math.hypot(x - halfEx, edy);
-        const exitLight = Math.max(0, 1 - edist / 16) * 0.65;
+        // Faint eerie glow around the Exit Portal (lights up on Chapter 6 only when you get close)
+        let exitLight = 0;
+        if (exitRevealFactor > 0) {
+          const edist = Math.hypot(x - halfEx, edy);
+          exitLight = Math.max(0, 1 - edist / 16) * 0.65 * exitRevealFactor;
+        }
 
         const totalLight = Math.min(1, Math.max(ambient, light + exitLight));
         const darkness = 1 - totalLight;
@@ -749,22 +1222,36 @@
 
     const x = Math.round(state.mouseX);
     const y = Math.round(state.mouseY);
+    const invincible = state.adminInvincible;
 
-    // Subtle warm lantern aura
+    // Subtle warm lantern aura (or cyan shield aura when invincible)
     const auraR = 8 + Math.sin(state.time * 28) * 1.2;
-    ctx.fillStyle =
-      state.proximity > 0.65
-        ? "rgba(255, 60, 60, 0.25)"
-        : "rgba(255, 200, 115, 0.2)";
+    ctx.fillStyle = invincible
+      ? "rgba(92, 242, 255, 0.28)"
+      : state.proximity > 0.65
+      ? "rgba(255, 60, 60, 0.25)"
+      : "rgba(255, 200, 115, 0.2)";
     ctx.beginPath();
     ctx.arc(x, y, auraR, 0, Math.PI * 2);
     ctx.fill();
+
+    if (invincible) {
+      ctx.strokeStyle = "#5cf2ff";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(x, y, 5, 0, Math.PI * 2);
+      ctx.stroke();
+    }
 
     // Exact 3x3 pixel hitbox core (dark 1px outline around bright soul pixel)
     ctx.fillStyle = "#000000";
     ctx.fillRect(x - 2, y - 2, 5, 5);
 
-    ctx.fillStyle = state.proximity > 0.7 ? "#ff4048" : "#ffcb6b";
+    ctx.fillStyle = invincible
+      ? "#5cf2ff"
+      : state.proximity > 0.7
+      ? "#ff4048"
+      : "#ffcb6b";
     ctx.fillRect(x - 1, y - 1, 3, 3);
 
     ctx.fillStyle = "#ffffff";
@@ -781,9 +1268,246 @@
     ctx.globalAlpha = 1;
   }
 
+  // Render smoky pixel bodies of hunting mobs (under lighting)
+  function drawMobsBody() {
+    for (let i = 0; i < state.mobs.length; i++) {
+      const mob = state.mobs[i];
+      const bob = Math.sin(state.time * 7 + mob.phase) * 1.4;
+      const mx = Math.round(mob.x);
+      const my = Math.round(mob.y + bob);
+
+      // Draw Spirit's lingering purple static husk left where she started phasing
+      if (mob.type === "spirit" && mob.husk) {
+        const ha = Math.max(0, (mob.husk.life / mob.husk.maxLife) * 0.55);
+        const hx = Math.round(mob.husk.x);
+        const hy = Math.round(mob.husk.y);
+        const jx = Math.random() < 0.35 ? ((Math.random() - 0.5) * 3) | 0 : 0;
+        ctx.save();
+        ctx.globalAlpha = ha;
+        ctx.fillStyle = "#4d146b";
+        ctx.fillRect(hx - 4 + jx, hy - 4, 8, 8);
+        ctx.fillStyle = "#c86dff";
+        ctx.fillRect(hx - 3 + jx, hy - 2, 2, 1);
+        ctx.fillRect(hx + 1 + jx, hy - 2, 2, 1);
+        ctx.restore();
+      }
+
+      // Smoky shadow trail
+      for (let t = 0; t < mob.trail.length; t++) {
+        const tr = mob.trail[t];
+        const frac = tr.life / 0.28;
+        if (mob.type === "spirit") {
+          ctx.fillStyle = tr.enraged
+            ? `rgba(215, 95, 255, ${frac * 0.65})`
+            : `rgba(135, 40, 210, ${frac * 0.5})`;
+          ctx.fillRect((tr.x - 2) | 0, (tr.y - 2) | 0, 4, 4);
+        } else {
+          ctx.fillStyle =
+            mob.type === "dasher"
+              ? `rgba(170, 18, 34, ${frac * 0.45})`
+              : `rgba(28, 10, 26, ${frac * 0.5})`;
+          ctx.fillRect((tr.x - 3) | 0, (tr.y - 3) | 0, 6, 6);
+        }
+      }
+
+      // Spirit blinking-fading visibility during teleport / return
+      let alpha = 1;
+      let glitchX = 0;
+      if (mob.type === "spirit") {
+        alpha = mob.spiritAlpha;
+        const blinking =
+          mob.spiritState === "fadeout" ||
+          mob.spiritState === "fadein" ||
+          mob.spiritState === "return_fade";
+        if (blinking) {
+          glitchX = (((Math.random() - 0.5) * 4) | 0);
+          if (Math.floor(state.time * 24) % 2 === 0) alpha *= 0.2;
+        }
+        if (alpha <= 0.02) continue;
+      }
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
+
+      // Dark gaunt pixel wraith body
+      ctx.fillStyle = mob.type === "spirit" ? "#160521" : "#060208";
+      ctx.fillRect(mx - 5 + glitchX, my - 5, 10, 10);
+      ctx.fillStyle =
+        mob.type === "spirit"
+          ? "#4b126e"
+          : mob.type === "dasher"
+          ? "#3b060f"
+          : mob.type === "intercept"
+          ? "#260b30"
+          : "#1a0a16";
+      ctx.fillRect(mx - 4 + glitchX, my - 4, 8, 8);
+
+      // Ragged floating bottom tendrils
+      const f = ((state.time * 12 + i) | 0) % 2;
+      ctx.fillStyle = mob.type === "spirit" ? "#2d0845" : "#08020a";
+      ctx.fillRect(mx - 4 + glitchX, my + 4, 2, 2 + f);
+      ctx.fillRect(mx - 1 + glitchX, my + 4, 2, 3 - f);
+      ctx.fillRect(mx + 2 + glitchX, my + 4, 2, 2 + f);
+
+      ctx.restore();
+    }
+  }
+
+  // Render glowing hunter eyes + lunge telegraph ABOVE darkness so you can dodge them!
+  function drawMobsGlow() {
+    for (let i = 0; i < state.mobs.length; i++) {
+      const mob = state.mobs[i];
+      const bob = Math.sin(state.time * 7 + mob.phase) * 1.4;
+      const mx = Math.round(mob.x);
+      const my = Math.round(mob.y + bob);
+
+      // Spirit blinking-fading & enraged glow
+      if (mob.type === "spirit") {
+        const blinking =
+          mob.spiritState === "fadeout" ||
+          mob.spiritState === "fadein" ||
+          mob.spiritState === "return_fade";
+        const enraged = mob.spiritState === "enraged";
+        const glitchX = blinking ? (((Math.random() - 0.5) * 4) | 0) : 0;
+        const blinkMul =
+          blinking && Math.floor(state.time * 24) % 2 === 0 ? 0.2 : 1;
+        const glowAlpha = mob.spiritAlpha * blinkMul;
+        if (glowAlpha <= 0.02) continue;
+
+        ctx.save();
+        ctx.globalAlpha = glowAlpha;
+
+        ctx.fillStyle = enraged
+          ? "rgba(220, 95, 255, 0.38)"
+          : "rgba(180, 65, 255, 0.22)";
+        ctx.beginPath();
+        ctx.arc(mx + glitchX, my, mob.radius + (enraged ? 5 : 3), 0, Math.PI * 2);
+        ctx.fill();
+
+        // Piercing spectral violet/white eyes (bright white-violet while sped up!)
+        ctx.fillStyle =
+          enraged || mob.spiritState === "fadein" ? "#ffffff" : "#e38cff";
+        ctx.fillRect(mx - 3 + glitchX, my - 2, 2, 2);
+        ctx.fillRect(mx + 1 + glitchX, my - 2, 2, 2);
+        ctx.restore();
+        continue;
+      }
+
+      // Dash Hound lunge telegraph sightline during windup
+      if (mob.type === "dasher" && mob.dashState === "windup") {
+        const flash = Math.floor(state.time * 24) % 2 === 0;
+        ctx.strokeStyle = flash
+          ? "rgba(255, 50, 65, 0.85)"
+          : "rgba(255, 190, 90, 0.6)";
+        ctx.lineWidth = 1;
+        ctx.setLineDash([3, 3]);
+        ctx.beginPath();
+        ctx.moveTo(mx, my);
+        ctx.lineTo(mx + mob.dashDirX * 52, my + mob.dashDirY * 52);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      // Faint ominous aura around mob
+      ctx.fillStyle =
+        mob.type === "dasher"
+          ? mob.dashState === "windup" || mob.dashState === "dash"
+            ? "rgba(255, 40, 55, 0.34)"
+            : "rgba(220, 35, 50, 0.16)"
+          : mob.type === "intercept"
+          ? "rgba(195, 70, 255, 0.16)"
+          : "rgba(255, 45, 65, 0.14)";
+      ctx.beginPath();
+      ctx.arc(mx, my, mob.radius + 3, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Piercing glowing pixel eyes visible through the dark
+      const eyeColor =
+        mob.type === "dasher"
+          ? mob.dashState === "windup"
+            ? "#ffffff"
+            : "#ff3344"
+          : mob.type === "intercept"
+          ? "#e070ff"
+          : "#ff4b58";
+      ctx.fillStyle = eyeColor;
+      ctx.fillRect(mx - 3, my - 2, 2, 2);
+      ctx.fillRect(mx + 1, my - 2, 2, 2);
+
+      // Tiny jagged mouth flash when lunging
+      if (mob.type === "dasher" && mob.dashState === "dash") {
+        ctx.fillStyle = "#ffcccc";
+        ctx.fillRect(mx - 2, my + 2, 4, 1);
+      }
+    }
+  }
+
+  // Animated pixel-art dawn archway escape backdrop for Victory Screen
+  function drawVictoryScene() {
+    // Deep night-to-emerald-dawn gradient bands (pixel-stepped)
+    const skyBands = ["#040706", "#07100c", "#0b1a13", "#122b1e", "#1d402c"];
+    for (let i = 0; i < skyBands.length; i++) {
+      ctx.fillStyle = skyBands[i];
+      ctx.fillRect(0, i * 40, W, 40);
+    }
+
+    // Soft pulsing light beam streaming down from the open exit archway
+    const pulse = 0.5 + 0.5 * Math.sin(state.time * 2.2);
+    ctx.fillStyle = `rgba(110, 245, 155, ${0.08 + pulse * 0.06})`;
+    ctx.beginPath();
+    ctx.moveTo(118, 22);
+    ctx.lineTo(202, 22);
+    ctx.lineTo(260, H);
+    ctx.lineTo(60, H);
+    ctx.closePath();
+    ctx.fill();
+
+    // Stone tunnel framing the open archway
+    ctx.fillStyle = "#0b090d";
+    ctx.fillRect(0, 0, 86, H);
+    ctx.fillRect(234, 0, 86, H);
+    ctx.fillRect(86, 0, 148, 26);
+
+    // Pixel stone brick edge details along archway
+    ctx.fillStyle = "#1c1821";
+    for (let y = 26; y < H; y += 12) {
+      ctx.fillRect(80, y, 8, 10);
+      ctx.fillRect(232, y, 8, 10);
+    }
+    ctx.fillStyle = "#2b2533";
+    ctx.fillRect(86, 22, 148, 6);
+
+    // Distant stone steps ascending into the light
+    for (let step = 0; step < 6; step++) {
+      const sy = 186 - step * 14;
+      const sw = 148 - step * 14;
+      const sx = CX - sw / 2;
+      ctx.fillStyle = step % 2 === 0 ? "#122018" : "#182b20";
+      ctx.fillRect(sx | 0, sy, sw | 0, 14);
+      ctx.fillStyle = "rgba(130, 255, 175, 0.16)";
+      ctx.fillRect(sx | 0, sy, sw | 0, 2);
+    }
+
+    // Faint receding eyes far in the dark corners — watching you escape
+    const eyeFade = Math.max(0.15, 0.55 - Math.sin(state.time * 1.3) * 0.2);
+    ctx.fillStyle = `rgba(255, 50, 65, ${eyeFade})`;
+    ctx.fillRect(32, 74, 2, 2);
+    ctx.fillRect(37, 74, 2, 2);
+    ctx.fillRect(278, 118, 2, 2);
+    ctx.fillRect(283, 118, 2, 2);
+
+    // Rising dawn embers & dust motes
+    drawParticles();
+  }
+
   function render() {
     if (state.phase === "JUMPSCARE") {
       jumpscare.render(ctx);
+      return;
+    }
+
+    if (state.phase === "VICTORY") {
+      drawVictoryScene();
       return;
     }
 
@@ -800,16 +1524,22 @@
     // 3. Center sanctuary ritual seal
     drawCenterSanctuaryRing();
 
-    // 4. Pulsing exit portal
-    drawExitPortal();
+    // 4. Exit portal (empty blank holes on Chapter 6)
+    drawExitPortal(focusX, focusY);
 
-    // 5. Lantern embers
+    // 5. Hunting mob bodies (Act III)
+    drawMobsBody();
+
+    // 6. Lantern embers
     drawParticles();
 
-    // 6. Bayer-dithered pixel flashlight darkness
+    // 7. Bayer-dithered pixel flashlight darkness
     drawDitheredLighting(focusX, focusY);
 
-    // 7. Player's crisp pixel hitbox cursor on top of darkness
+    // 8. Glowing mob eyes & dash telegraphs piercing the dark
+    drawMobsGlow();
+
+    // 9. Player's crisp pixel hitbox cursor on top of darkness
     drawPlayerCursor();
 
     // 8. Danger crimson edge pulse when dangerously close to a wall
@@ -832,14 +1562,12 @@
     requestAnimationFrame(frame);
   }
 
-  loadBest();
   loadCurrentLevel();
   showReadyOverlay({
     title: "DON'T TOUCH THE WALLS",
-    subtitle: "PLACE YOUR MOUSE IN THE CENTER & PRESS START",
-    note: "STAY INSIDE THE TIGHT CORRIDORS. HIT A WALL = RANDOM JUMPSCARE. AUDIO ON.",
+    subtitle: CENTER_PROMPT,
+    note: "HEADPHONES RECOMMENDED — PLAY WITH AUDIO ON FOR THE BEST EXPERIENCE.",
     buttonText: "START",
-    showExtraActions: false,
   });
 
   requestAnimationFrame(frame);
